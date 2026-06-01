@@ -1,0 +1,24 @@
+[package]
+name = "oxitext-sdf"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Signed-distance-field glyph atlas generation for OxiText"
+keywords = ["sdf", "glyph", "distance-field", "typography", "cooljapan"]
+categories = ["graphics", "rendering", "text-processing"]
+
+[features]
+default = []
+sdf = []   # activates the public SDF API (marker feature; all symbols public by default)
+simd = ["dep:wide"]
+
+[dependencies]
+oxitext-core   = { workspace = true }
+oxitext-raster = { workspace = true }
+ttf-parser     = { workspace = true }
+rayon          = { workspace = true }
+wide           = { workspace = true, optional = true }
+png            = { workspace = true }

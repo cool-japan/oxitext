@@ -1,0 +1,10 @@
+[bans]
+deny = [
+  { name = "freetype-sys" },
+  { name = "fontconfig-sys" },
+  { name = "harfbuzz-sys" },
+  { name = "brotli" },
+  { name = "flate2" },
+  { name = "miniz_oxide" },
+  { name = "ring" },
+]

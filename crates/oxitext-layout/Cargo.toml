@@ -1,0 +1,24 @@
+[package]
+name = "oxitext-layout"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Text layouter for OxiText: LTR/RTL bidi, UAX #14 line-break, vertical CJK (M1/M2)"
+keywords = ["text", "layout", "typography", "oxitext"]
+categories = ["graphics", "text-processing"]
+
+[features]
+hyphenation = ["dep:hypher"]
+icu = ["dep:oxitext-icu"]
+
+[dependencies]
+oxitext-core      = { workspace = true }
+unicode-bidi      = { workspace = true }
+unicode-linebreak = { workspace = true }
+ttf-parser        = { workspace = true }
+rayon             = { workspace = true }
+hypher            = { workspace = true, optional = true }
+oxitext-icu       = { workspace = true, optional = true }

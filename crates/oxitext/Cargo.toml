@@ -1,0 +1,45 @@
+[package]
+name = "oxitext"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Pure-Rust text rendering pipeline (facade): shape → layout → raster"
+keywords = ["text", "rendering", "typography", "oxitext", "cooljapan"]
+categories = ["graphics", "text-processing", "rendering"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[features]
+default = ["pure"]
+pure = [
+    "dep:oxitext-shape",
+    "dep:oxitext-raster",
+]
+sdf        = ["dep:oxitext-sdf"]
+icu        = ["dep:oxitext-icu", "oxitext-layout/icu"]
+simd       = ["oxitext-raster/simd"]
+parallel   = ["pure", "dep:rayon"]
+png-output = ["dep:png"]
+
+[dependencies]
+oxitext-core   = { workspace = true }
+# oxitext-layout is always required: M2 bidi/linebreak/vertical re-exports are unconditional.
+oxitext-layout = { workspace = true }
+oxitext-shape  = { workspace = true, optional = true }
+oxitext-raster = { workspace = true, optional = true }
+oxitext-sdf    = { workspace = true, optional = true }
+oxitext-icu    = { workspace = true, optional = true }
+rayon          = { workspace = true, optional = true }
+png            = { workspace = true, optional = true }
+ttf-parser     = { workspace = true }
+oxifont        = { workspace = true }
+
+[dev-dependencies]
+# Used by integration tests (color_emoji.rs) to inspect font tables directly.
+ttf-parser   = { workspace = true }
+oxitext-raster = { workspace = true, features = ["ab-glyph-backend"] }

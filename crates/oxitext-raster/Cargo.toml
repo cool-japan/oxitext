@@ -1,0 +1,32 @@
+[package]
+name = "oxitext-raster"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Fontdue-based glyph rasterizer for OxiText"
+keywords = ["text", "rasterizer", "fontdue", "bitmap", "oxitext"]
+categories = ["graphics", "rendering"]
+
+[features]
+ab-glyph-backend = []
+simd             = ["dep:wide"]
+swash-backend    = ["dep:swash"]
+svg-backend      = ["dep:resvg", "dep:tiny-skia"]
+oxifont-backend  = ["dep:oxifont-parser", "dep:oxifont-core", "dep:tiny-skia"]
+
+[dependencies]
+oxitext-core    = { workspace = true }
+fontdue         = { workspace = true }
+ttf-parser      = { workspace = true }
+ab_glyph        = { workspace = true }
+lru             = { workspace = true }
+png             = { workspace = true }
+wide            = { workspace = true, optional = true }
+swash           = { workspace = true, optional = true }
+resvg           = { workspace = true, optional = true }
+tiny-skia       = { workspace = true, optional = true }
+oxifont-parser  = { workspace = true, optional = true }
+oxifont-core    = { workspace = true, optional = true }

@@ -1,0 +1,27 @@
+[package]
+name = "oxitext-shape"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Swash-based text shaper for OxiText"
+keywords = ["text", "shaping", "swash", "opentype", "oxitext"]
+categories = ["graphics", "text-processing"]
+
+[features]
+rustybuzz-backend = ["dep:rustybuzz"]
+icu = ["dep:oxitext-icu"]
+system-fonts = ["dep:oxifont"]
+
+[dependencies]
+oxitext-core         = { workspace = true }
+swash                = { workspace = true }
+rustybuzz            = { workspace = true, optional = true }
+lru                  = { workspace = true }
+ttf-parser           = { workspace = true }
+unicode-segmentation = { workspace = true }
+oxitext-icu          = { workspace = true, optional = true }
+smallvec             = { workspace = true }
+oxifont              = { workspace = true, optional = true, features = ["db"] }

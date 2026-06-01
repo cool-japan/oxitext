@@ -1,0 +1,23 @@
+[package]
+name = "oxitext-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core traits and value types for OxiText"
+keywords = ["text", "shaping", "layout", "cooljapan", "oxitext"]
+categories = ["graphics", "rendering"]
+
+[features]
+default = ["std"]
+std = []
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { workspace = true, optional = true }
+smallvec = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
