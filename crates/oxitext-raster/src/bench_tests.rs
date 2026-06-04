@@ -10,8 +10,8 @@ mod tests {
     use crate::{FontdueRaster, LcdFilterKernel, RasterBackend};
     use std::path::Path;
 
-    /// Load the project test font, falling back to system fonts when the
-    /// fixture is absent.
+    /// Load the project test font, falling back to system fonts and then the
+    /// statically bundled Noto Sans Regular when fixtures are absent.
     fn load_test_font() -> Vec<u8> {
         let fixture =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/test-font.ttf");
@@ -27,7 +27,9 @@ mod tests {
                 return std::fs::read(p).expect("read system font");
             }
         }
-        panic!("no test font found — add tests/fixtures/test-font.ttf");
+        // Fall back to statically bundled Noto Sans Regular for deterministic,
+        // system-font-independent testing.
+        oxifont_bundled::NOTO_SANS_REGULAR.to_vec()
     }
 
     /// Benchmark rasterization of 200 unique glyphs at 16 px, 32 px, and 64 px.

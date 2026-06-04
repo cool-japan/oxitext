@@ -12,6 +12,10 @@
 //! This crate has no default features. All types are unconditionally available
 //! once the crate is added as a dependency.
 //!
+//! | Feature | Enables |
+//! |---------|---------|
+//! | `fonts` | [`LocaleFontSelector`] — locale-aware font family resolution via `oxifont-db` |
+//!
 //! # Quick start
 //!
 //! ```rust
@@ -72,6 +76,8 @@
 pub mod casemap;
 pub mod collate;
 pub mod datetime;
+#[cfg(feature = "fonts")]
+pub mod font_select;
 pub mod list;
 pub mod normalize;
 pub mod number;
@@ -82,6 +88,8 @@ pub mod segment;
 pub use casemap::CaseMapper;
 pub use collate::{CollateError, CollationStrength, IcuCollator};
 pub use datetime::{DateLength, IcuDateTimeFormatter, TimeLength};
+#[cfg(feature = "fonts")]
+pub use font_select::LocaleFontSelector;
 /// Type alias for [`CollateError`] — used for cross-module consistency.
 pub type IcuError = CollateError;
 pub use list::{IcuListFormatter, ListType};

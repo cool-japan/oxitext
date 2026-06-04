@@ -342,26 +342,13 @@ fn load_font_opt(relative: &str) -> Option<Vec<u8>> {
 }
 
 /// Smoke test: render ASCII text and call composite_to_rgba end-to-end.
-/// Skips if no test font is available.
+/// Uses oxifont-bundled Noto Sans Regular for deterministic, CI-safe rendering.
 #[test]
 fn smoke_composite_with_system_font() {
-    let Some(font_bytes) = load_font_opt("../../tests/fixtures/test-font.ttf").or_else(|| {
-        let candidates = [
-            "/Library/Fonts/Arial Unicode.ttf",
-            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        ];
-        candidates.iter().find_map(|p| {
-            if Path::new(p).exists() {
-                Some(std::fs::read(p).expect("read system font"))
-            } else {
-                None
-            }
-        })
-    }) else {
-        // No font available — skip.
-        return;
-    };
+    // 1. Project fixture (deterministic, checked in).
+    // 2. Bundled Noto Sans Regular — always available, eliminates system-font dependency.
+    let font_bytes = load_font_opt("../../tests/fixtures/test-font.ttf")
+        .unwrap_or_else(|| oxifont_bundled::NOTO_SANS_REGULAR.to_vec());
 
     let mut pipeline = oxitext::Pipeline::from_bytes(&font_bytes).expect("valid font");
     let style = oxitext::TextStyle::default();

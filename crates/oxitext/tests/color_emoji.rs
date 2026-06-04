@@ -26,18 +26,10 @@ fn load_font_opt(relative: &str) -> Option<Vec<u8>> {
 }
 
 fn load_test_font() -> Vec<u8> {
+    // 1. Project fixture (deterministic, checked in).
+    // 2. Bundled Noto Sans Regular — always available, no system font required.
     load_font_opt("../../tests/fixtures/test-font.ttf")
-        .or_else(|| {
-            let candidates = [
-                "/Library/Fonts/Arial Unicode.ttf",
-                "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-            ];
-            candidates
-                .iter()
-                .find(|&&p| Path::new(p).exists())
-                .map(|&p| std::fs::read(p).expect("read system font"))
-        })
-        .expect("no test font found")
+        .unwrap_or_else(|| oxifont_bundled::NOTO_SANS_REGULAR.to_vec())
 }
 
 /// Verifies that `render_colr_v0` does not panic on a plain font and returns

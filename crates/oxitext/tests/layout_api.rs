@@ -5,21 +5,13 @@ use oxitext::{Pipeline, Rgba8, TextAlignment, TextStyle};
 use std::path::Path;
 
 fn load_test_font() -> Vec<u8> {
+    // 1. Project fixture (deterministic, checked in).
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/test-font.ttf");
     if fixture.exists() {
         return std::fs::read(&fixture).expect("read fixture font");
     }
-    let candidates = [
-        "/Library/Fonts/Arial Unicode.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ];
-    for path in &candidates {
-        if Path::new(path).exists() {
-            return std::fs::read(path).expect("read system font");
-        }
-    }
-    panic!("no test font found — add tests/fixtures/test-font.ttf");
+    // 2. Bundled Noto Sans Regular — always available, no system font required.
+    oxifont_bundled::NOTO_SANS_REGULAR.to_vec()
 }
 
 #[test]

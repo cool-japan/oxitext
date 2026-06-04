@@ -20,11 +20,12 @@ pure = [
     "dep:oxitext-shape",
     "dep:oxitext-raster",
 ]
-sdf        = ["dep:oxitext-sdf"]
-icu        = ["dep:oxitext-icu", "oxitext-layout/icu"]
-simd       = ["oxitext-raster/simd"]
-parallel   = ["pure", "dep:rayon"]
-png-output = ["dep:png"]
+sdf         = ["dep:oxitext-sdf"]
+icu         = ["dep:oxitext-icu", "oxitext-layout/icu"]
+simd        = ["oxitext-raster/simd"]
+parallel    = ["pure", "dep:rayon"]
+png-output  = ["dep:png"]
+font-subset = ["dep:oxifont-subset"]
 
 [dependencies]
 oxitext-core   = { workspace = true }
@@ -36,10 +37,14 @@ oxitext-sdf    = { workspace = true, optional = true }
 oxitext-icu    = { workspace = true, optional = true }
 rayon          = { workspace = true, optional = true }
 png            = { workspace = true, optional = true }
+oxifont-subset = { workspace = true, optional = true }
 ttf-parser     = { workspace = true }
 oxifont        = { workspace = true }
 
 [dev-dependencies]
 # Used by integration tests (color_emoji.rs) to inspect font tables directly.
-ttf-parser   = { workspace = true }
-oxitext-raster = { workspace = true, features = ["ab-glyph-backend"] }
+ttf-parser      = { workspace = true }
+oxitext-raster  = { path = "../oxitext-raster", features = ["ab-glyph-backend"] }
+# Used by integration tests to provide a deterministic bundled font fallback,
+# eliminating reliance on system fonts for reproducible CI results.
+oxifont-bundled = { workspace = true }

@@ -16,18 +16,19 @@
 //! | `simd` | SIMD-accelerated rasterization paths in the fontdue backend | no |
 //! | `parallel` | Parallel rasterization via rayon (implies `pure`) | no |
 //! | `png-output` | [`RenderResult::to_png`] — write rendered text to a PNG file | no |
+//! | `font-subset` | [`pdf_subset`] module: on-the-fly font subsetting for PDF rendering pipelines | no |
 //!
 //! ### Combining features
 //!
 //! ```toml
 //! # Minimal: pipeline only
-//! oxitext = { version = "0.1.0", features = ["pure"] }
+//! oxitext = { version = "0.1.1", features = ["pure"] }
 //!
 //! # With SDF atlas for GPU rendering
-//! oxitext = { version = "0.1.0", features = ["pure", "sdf"] }
+//! oxitext = { version = "0.1.1", features = ["pure", "sdf"] }
 //!
 //! # Full: pipeline + ICU + SDF + PNG output
-//! oxitext = { version = "0.1.0", features = ["pure", "sdf", "icu", "png-output"] }
+//! oxitext = { version = "0.1.1", features = ["pure", "sdf", "icu", "png-output"] }
 //! ```
 //!
 //! ### What each feature pulls in
@@ -50,6 +51,11 @@
 //!   No API surface change; [`Pipeline::render`] automatically parallelizes the raster phase.
 //! - **`png-output`**: Adds [`RenderResult::to_png`] for writing rendered bitmaps directly to
 //!   PNG files. Pulls in the `png` crate (~50 KB). Useful for testing and offline rendering.
+//! - **`font-subset`**: Adds the [`pdf_subset`] module with [`pdf_subset::TextFontSubsetter`],
+//!   a streaming accumulator for on-the-fly font subsetting during PDF text rendering.
+//!   Pulls in `oxifont-subset` (~300 KB). Feed text via [`pdf_subset::TextFontSubsetter::feed_text`]
+//!   during page composition, then call [`pdf_subset::TextFontSubsetter::finalize`] to produce
+//!   a minimal subset font for embedding in the PDF stream.
 //!
 //! **Blueprint deviation:** The original blueprint listed `default = ["pure","emoji"]`,
 //! but the `emoji` feature depends on the `oxitext-emoji` crate which is
@@ -84,6 +90,20 @@ pub use oxitext_layout::{LayoutEngine, LayoutResult, Line, LineMetrics, Paragrap
 pub mod sdf {
     pub use oxitext_sdf::*;
 }
+
+/// On-the-fly font subsetting for PDF text rendering pipelines.
+///
+/// Enabled by the `font-subset` feature flag:
+///
+/// ```toml
+/// oxitext = { version = "0.1.1", features = ["font-subset"] }
+/// ```
+///
+/// The main entry point is [`pdf_subset::TextFontSubsetter`], which accumulates
+/// glyph usage across multiple pages and produces a minimal subset font via
+/// [`pdf_subset::TextFontSubsetter::finalize`].
+#[cfg(feature = "font-subset")]
+pub mod pdf_subset;
 
 // Re-exports of backend traits and key shaping types for users who want
 // custom backends without taking a direct dependency on the sub-crates.

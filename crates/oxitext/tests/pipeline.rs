@@ -3,26 +3,14 @@ use std::path::Path;
 use std::sync::Arc;
 
 fn load_test_font() -> Vec<u8> {
-    // Try the workspace-level fixture first (relative to this crate).
+    // 1. Project fixture (deterministic, checked in).
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/test-font.ttf");
     if fixture.exists() {
         return std::fs::read(&fixture).expect("read fixture font");
     }
-    // Fallback: well-known macOS/Linux system fonts (TTF only, not TTC).
-    let candidates = [
-        "/Library/Fonts/Arial Unicode.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ];
-    for path in &candidates {
-        if Path::new(path).exists() {
-            return std::fs::read(path).expect("read system font");
-        }
-    }
-    panic!(
-        "no test font found — add a TTF to {}/tests/fixtures/test-font.ttf",
-        env!("CARGO_MANIFEST_DIR")
-    );
+    // 2. Bundled Noto Sans Regular — always available, no system font required.
+    //    This ensures tests are deterministic in CI and sandboxed environments.
+    oxifont_bundled::NOTO_SANS_REGULAR.to_vec()
 }
 
 #[test]

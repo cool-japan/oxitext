@@ -48,6 +48,34 @@ pub use system_fonts::{
     load_font_for_family_from,
 };
 
+/// Native OS font fallback for complex script coverage.
+///
+/// When the `native-fallback` Cargo feature is enabled, this module re-exports
+/// the [`oxifont_adapter_native::shaper_bridge`] API, allowing shaping engines
+/// to resolve Unicode codepoints to OS-native font bytes (CoreText on macOS,
+/// DirectWrite on Windows, pure filesystem scan on Linux).
+///
+/// # Example
+///
+/// ```no_run
+/// # #[cfg(feature = "native-fallback")]
+/// # {
+/// use oxitext_shape::native_fallback;
+///
+/// let primary = std::fs::read("NotoSans-Regular.ttf").unwrap();
+/// // For Arabic/Hebrew/CJK text that NotoSans may not cover:
+/// let fallbacks = native_fallback::collect_fallback_fonts_for_text("مرحبا", &primary);
+/// println!("{} fallback font(s) provided", fallbacks.len());
+/// # }
+/// ```
+#[cfg(feature = "native-fallback")]
+pub mod native_fallback {
+    pub use oxifont_adapter_native::shaper_bridge::{
+        collect_fallback_fonts_for_text, collect_fonts_for_text, find_native_font_for_codepoint,
+        load_best_native_font_for_text, load_native_font_for_codepoint_with_index,
+    };
+}
+
 #[cfg(feature = "rustybuzz-backend")]
 pub use backend::RustybuzzShaper;
 pub use backend::ShapeBackend;

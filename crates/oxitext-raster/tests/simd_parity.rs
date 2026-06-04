@@ -10,6 +10,14 @@
 use std::path::Path;
 use std::sync::Arc;
 
+/// Load a font for testing.
+///
+/// Resolution order:
+/// 1. Project fixture at `tests/fixtures/test-font.ttf` (deterministic, checked in).
+/// 2. `oxifont-bundled` Noto Sans Regular — always available when the
+///    `bundled-noto` feature is enabled on the dev-dependency (default in this
+///    workspace). Ensures tests are deterministic without system fonts.
+/// 3. Known system font paths as last resort.
 fn load_test_font() -> Arc<[u8]> {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/test-font.ttf");
     if fixture.exists() {
@@ -19,16 +27,12 @@ fn load_test_font() -> Arc<[u8]> {
                 .as_slice(),
         );
     }
-    let candidates = [
-        "/Library/Fonts/Arial Unicode.ttf",
-        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-    ];
-    for p in &candidates {
-        if Path::new(p).exists() {
-            return Arc::from(std::fs::read(p).expect("read system font").as_slice());
-        }
-    }
-    panic!("no test font found — add tests/fixtures/test-font.ttf");
+
+    // Use the statically bundled Noto Sans Regular so that rasterization tests
+    // are deterministic and do not depend on system-installed fonts.
+    // `NOTO_SANS_REGULAR` is always available because the workspace dev-dependency
+    // enables `features = ["bundled-noto"]`.
+    Arc::from(oxifont_bundled::NOTO_SANS_REGULAR)
 }
 
 /// Rasterize a single glyph at `px_size` using the fontdue backend and return

@@ -5,6 +5,21 @@ All notable changes to OxiText are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-06-04
+
+### Added
+
+- **`oxitext-icu`: `fonts` feature + `LocaleFontSelector`** — new `font_select` module (behind the `fonts` Cargo feature) provides `LocaleFontSelector`, a locale-aware font family selector backed by an `oxifont-db` `FontDatabase`. Exposes `family_for_locale`, `locale_name_for_locale`, `query_family`, `families_for_locale`, and `batch_resolve` for BCP-47 locale → font family resolution with CJK/RTL-aware CSS-Level-4 generic mapping.
+- **`oxitext-shape`: `native-fallback` feature + `native_fallback` module** — new feature gate re-exports `oxifont_adapter_native::shaper_bridge` for OS-native font fallback (CoreText on macOS, DirectWrite on Windows, filesystem scan on Linux). Exposes `collect_fallback_fonts_for_text`, `collect_fonts_for_text`, `find_native_font_for_codepoint`, `load_best_native_font_for_text`, and `load_native_font_for_codepoint_with_index`.
+- **`oxitext`: `font-subset` feature + `pdf_subset` module** — new module with `TextFontSubsetter`, a streaming accumulator for on-the-fly font subsetting during PDF composition. Wraps `oxifont_subset::pdf_subset::PdfFontSubsetter` with ergonomic `feed_text`, `feed_char`, `feed_gid`, `feed_gids`, `merge`, `finalize`, `finalize_into_result`, and `reset` methods; includes PDF and web presets (`for_pdf`, `for_web`). Re-exports `PdfSubsetResult`, `SubsetError`, `SubsetOptions`, and `SubsetStats`.
+- **`oxifont-bundled` dev-dependency** — `oxifont-bundled` (with `bundled-noto` feature) added as a workspace-level dep and as a dev-dependency in `oxitext`, `oxitext-raster`, enabling all integration tests to use the statically embedded Noto Sans Regular.
+- **`oxifont-subset` and `oxifont-adapter-native` workspace deps** — `oxifont-subset` and `oxifont-adapter-native` added to workspace dependencies to back the new `font-subset` and `native-fallback` features.
+
+### Changed
+
+- **Test determinism: system-font panics replaced with `oxifont-bundled` fallback** — all integration and bench tests in `oxitext`, `oxitext-raster`, and `oxitext-shape` previously panicked when system fonts were absent. They now fall back to `oxifont_bundled::NOTO_SANS_REGULAR`, ensuring reproducible CI results without hardcoded absolute font paths.
+- **`oxitext-shape`: `system-fonts` dep alignment** — `oxifont` optional dep entry reformatted alongside new `oxifont-adapter-native` dep for consistency.
+
 ## [0.1.0] - 2026-06-01
 
 ### Added
@@ -94,4 +109,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FFI audit Dockerfile for CI-level purity verification
 - End-to-end conformance tests in `tests/`
 
+[0.1.1]: https://github.com/cool-japan/oxitext/releases/tag/v0.1.1
 [0.1.0]: https://github.com/cool-japan/oxitext/releases/tag/v0.1.0

@@ -30,3 +30,6 @@ resvg           = { workspace = true, optional = true }
 tiny-skia       = { workspace = true, optional = true }
 oxifont-parser  = { workspace = true, optional = true }
 oxifont-core    = { workspace = true, optional = true }
+
+[dev-dependencies]
+oxifont-bundled = { workspace = true }

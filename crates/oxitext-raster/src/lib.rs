@@ -311,7 +311,9 @@ mod tests {
                 return Arc::from(std::fs::read(p).expect("read system font").as_slice());
             }
         }
-        panic!("no test font found — add tests/fixtures/test-font.ttf");
+        // Fall back to statically bundled Noto Sans Regular for deterministic,
+        // system-font-independent testing.
+        Arc::from(oxifont_bundled::NOTO_SANS_REGULAR)
     }
 
     #[test]

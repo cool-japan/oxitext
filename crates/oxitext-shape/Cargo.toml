@@ -14,6 +14,9 @@ categories = ["graphics", "text-processing"]
 rustybuzz-backend = ["dep:rustybuzz"]
 icu = ["dep:oxitext-icu"]
 system-fonts = ["dep:oxifont"]
+# Enable native OS font fallback (CoreText/DirectWrite/pure-fs) for complex
+# script coverage via `oxifont-adapter-native::shaper_bridge`.
+native-fallback = ["dep:oxifont-adapter-native"]
 
 [dependencies]
 oxitext-core         = { workspace = true }
@@ -24,4 +27,5 @@ ttf-parser           = { workspace = true }
 unicode-segmentation = { workspace = true }
 oxitext-icu          = { workspace = true, optional = true }
 smallvec             = { workspace = true }
-oxifont              = { workspace = true, optional = true, features = ["db"] }
+oxifont                = { workspace = true, optional = true, features = ["db"] }
+oxifont-adapter-native = { workspace = true, optional = true }
