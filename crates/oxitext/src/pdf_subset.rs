@@ -15,7 +15,7 @@
 //! enabled:
 //!
 //! ```toml
-//! oxitext = { version = "0.1.1", features = ["font-subset"] }
+//! oxitext = { version = "0.1.2", features = ["font-subset"] }
 //! ```
 //!
 //! # Example

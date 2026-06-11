@@ -5,6 +5,22 @@
 //! extract the embedded bitmap data.  Also provides [`RawRasterGlyph`] and
 //! [`extract_raster_glyph`] for raw (undecoded) raster image extraction from
 //! any font table (CBDT, sbix, etc.).
+//!
+//! ## Raw CBDT bitmap formats
+//!
+//! In addition to PNG-encoded bitmaps (CBDT formats 17/18/19), this module now
+//! decodes all raw bitmap formats exposed by ttf-parser 0.25:
+//!
+//! | ttf-parser variant          | bpp | row padding | pixel layout             |
+//! |-----------------------------|-----|-------------|--------------------------|
+//! | `BitmapMono`                |   1 | byte-padded | MSB first; 1=black       |
+//! | `BitmapMonoPacked`          |   1 | none        | MSB first; 1=black       |
+//! | `BitmapGray2`               |   2 | byte-padded | MSB first; scale×85→α    |
+//! | `BitmapGray2Packed`         |   2 | none        | MSB first; scale×85→α    |
+//! | `BitmapGray4`               |   4 | byte-padded | upper nibble first; ×17→α|
+//! | `BitmapGray4Packed`         |   4 | none        | upper nibble first; ×17→α|
+//! | `BitmapGray8`               |   8 | N/A         | 1 byte per pixel = α     |
+//! | `BitmapPremulBgra32`        |  32 | N/A         | BGRA premultiplied       |
 
 /// Raw rasterized glyph image extracted from a font table (CBDT, sbix, etc.).
 ///
@@ -152,9 +168,10 @@ pub fn detect_color_glyph_type(face_data: &[u8], glyph_id: u16) -> ColorGlyphTyp
 ///
 /// Uses ttf-parser's `glyph_raster_image` API to locate an embedded bitmap at the
 /// requested `target_ppem` (pixels-per-em).  PNG-encoded bitmaps (CBDT formats 17,
-/// 18, 19) are decoded to RGBA using the `png` crate.  Raw-bitmap formats return
-/// `None` — their dimensions require simultaneous CBLC-metric parsing which is out
-/// of scope here.
+/// 18, 19) are decoded to RGBA using the `png` crate.  Raw-bitmap formats are
+/// decoded using the unpacker functions in this module; width and height are taken
+/// directly from the [`ttf_parser::RasterGlyphImage`] fields (available since
+/// ttf-parser 0.20).
 ///
 /// # Arguments
 /// - `face_data`: raw TTF/OTF bytes.
@@ -166,31 +183,47 @@ pub fn extract_cbdt_bitmap(
     glyph_id: u16,
     target_ppem: u8,
 ) -> Option<oxitext_core::ColorBitmap> {
+    use ttf_parser::RasterImageFormat as Rif;
+
     let face = ttf_parser::Face::parse(face_data, 0).ok()?;
     let gid = ttf_parser::GlyphId(glyph_id);
-    let raster_image = face.glyph_raster_image(gid, u16::from(target_ppem))?;
+    let img = face.glyph_raster_image(gid, u16::from(target_ppem))?;
 
-    match raster_image.format {
-        ttf_parser::RasterImageFormat::PNG => {
-            let bitmap = decode_png_to_bitmap(raster_image.data)?;
-            Some(oxitext_core::ColorBitmap {
-                width: bitmap.0,
-                height: bitmap.1,
-                rgba: bitmap.2,
-            })
+    let w = u32::from(img.width);
+    let h = u32::from(img.height);
+
+    let rgba = match img.format {
+        Rif::PNG => {
+            let (bw, bh, data) = decode_png_to_bitmap(img.data)?;
+            return Some(oxitext_core::ColorBitmap {
+                width: bw,
+                height: bh,
+                rgba: data,
+            });
         }
-        // Non-PNG formats (raw CBDT bitmaps) need CBLC metrics for dimensions;
-        // not implemented here.
-        _ => None,
-    }
+        Rif::BitmapMono => unpack_mono(img.data, w, h, false),
+        Rif::BitmapMonoPacked => unpack_mono(img.data, w, h, true),
+        Rif::BitmapGray2 => unpack_gray2(img.data, w, h, false),
+        Rif::BitmapGray2Packed => unpack_gray2(img.data, w, h, true),
+        Rif::BitmapGray4 => unpack_gray4(img.data, w, h, false),
+        Rif::BitmapGray4Packed => unpack_gray4(img.data, w, h, true),
+        Rif::BitmapGray8 => unpack_gray8(img.data, w, h),
+        Rif::BitmapPremulBgra32 => unpack_bgra32(img.data, w, h),
+    }?;
+
+    Some(oxitext_core::ColorBitmap {
+        width: w,
+        height: h,
+        rgba,
+    })
 }
 
 /// Render a CBDT/CBLC color bitmap glyph, returning the decoded RGBA bitmap as a
 /// [`crate::color::ColorGlyphBitmap`].
 ///
 /// CBDT entries can be PNG-encoded (format 17/18/19 — the common case for color
-/// emoji) or raw RGBA (format 7/8/9 — requires CBLC metrics to reconstruct
-/// dimensions, not yet implemented).  This function handles PNG-encoded bitmaps.
+/// emoji) or raw-bitmap formats (1/2/4/8/32-bit; dimensions are read directly from
+/// the [`ttf_parser::RasterGlyphImage`] fields).  All formats are now decoded.
 ///
 /// Returns `None` if the font has no CBDT data for the requested glyph, or the
 /// embedded bitmap cannot be decoded.
@@ -204,22 +237,249 @@ pub fn render_cbdt_glyph(
     glyph_id: u16,
     px_size: u16,
 ) -> Option<crate::color::ColorGlyphBitmap> {
+    use ttf_parser::RasterImageFormat as Rif;
+
     let face = ttf_parser::Face::parse(face_data, 0).ok()?;
     let gid = ttf_parser::GlyphId(glyph_id);
-    let raster_image = face.glyph_raster_image(gid, px_size)?;
+    let img = face.glyph_raster_image(gid, px_size)?;
 
-    match raster_image.format {
-        ttf_parser::RasterImageFormat::PNG => {
-            let (w, h, rgba) = decode_png_to_bitmap(raster_image.data)?;
-            Some(crate::color::ColorGlyphBitmap {
-                width: w,
-                height: h,
-                rgba,
-            })
+    let w = u32::from(img.width);
+    let h = u32::from(img.height);
+
+    let rgba = match img.format {
+        Rif::PNG => {
+            let (bw, bh, data) = decode_png_to_bitmap(img.data)?;
+            return Some(crate::color::ColorGlyphBitmap {
+                width: bw,
+                height: bh,
+                rgba: data,
+            });
         }
-        // Raw bitmap formats require CBLC size metrics — not yet implemented.
-        _ => None,
+        Rif::BitmapMono => unpack_mono(img.data, w, h, false),
+        Rif::BitmapMonoPacked => unpack_mono(img.data, w, h, true),
+        Rif::BitmapGray2 => unpack_gray2(img.data, w, h, false),
+        Rif::BitmapGray2Packed => unpack_gray2(img.data, w, h, true),
+        Rif::BitmapGray4 => unpack_gray4(img.data, w, h, false),
+        Rif::BitmapGray4Packed => unpack_gray4(img.data, w, h, true),
+        Rif::BitmapGray8 => unpack_gray8(img.data, w, h),
+        Rif::BitmapPremulBgra32 => unpack_bgra32(img.data, w, h),
+    }?;
+
+    Some(crate::color::ColorGlyphBitmap {
+        width: w,
+        height: h,
+        rgba,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Raw CBDT bitmap unpackers
+// ---------------------------------------------------------------------------
+
+/// Unpack a 1-bpp monochrome bitmap into RGBA bytes.
+///
+/// `packed = false` means rows are padded to a byte boundary (BitmapMono).
+/// `packed = true`  means data is tightly packed with no padding (BitmapMonoPacked).
+///
+/// Bit value 1 → opaque black `(0, 0, 0, 255)`.
+/// Bit value 0 → transparent `(0, 0, 0, 0)`.
+///
+/// Returns `None` if `data` is too short for the declared `width × height`.
+fn unpack_mono(data: &[u8], width: u32, height: u32, packed: bool) -> Option<Vec<u8>> {
+    let pixel_count = width.checked_mul(height)? as usize;
+    let mut rgba = Vec::with_capacity(pixel_count * 4);
+
+    if packed {
+        // Total bits needed; bytes must cover them all.
+        let total_bits = pixel_count;
+        let required_bytes = total_bits.div_ceil(8);
+        if data.len() < required_bytes {
+            return None;
+        }
+        for i in 0..pixel_count {
+            let byte_idx = i / 8;
+            let bit_shift = 7 - (i % 8); // MSB first
+            let bit = (data[byte_idx] >> bit_shift) & 1;
+            if bit == 1 {
+                rgba.extend_from_slice(&[0, 0, 0, 255]);
+            } else {
+                rgba.extend_from_slice(&[0, 0, 0, 0]);
+            }
+        }
+    } else {
+        // Row-padded: each row is `ceil(width / 8)` bytes.
+        let row_bytes = (width as usize).div_ceil(8);
+        let required_bytes = row_bytes.checked_mul(height as usize)?;
+        if data.len() < required_bytes {
+            return None;
+        }
+        for row in 0..height as usize {
+            let row_start = row * row_bytes;
+            for col in 0..width as usize {
+                let byte_idx = row_start + col / 8;
+                let bit_shift = 7 - (col % 8);
+                let bit = (data[byte_idx] >> bit_shift) & 1;
+                if bit == 1 {
+                    rgba.extend_from_slice(&[0, 0, 0, 255]);
+                } else {
+                    rgba.extend_from_slice(&[0, 0, 0, 0]);
+                }
+            }
+        }
     }
+
+    Some(rgba)
+}
+
+/// Unpack a 2-bpp grayscale bitmap into RGBA bytes.
+///
+/// Each 2-bit value `v` (0–3) is scaled to alpha by `v * 85`.
+/// Pixel = `RGBA(0, 0, 0, alpha)`.
+///
+/// `packed = false` → rows padded to byte boundary (BitmapGray2).
+/// `packed = true`  → tightly packed (BitmapGray2Packed).
+///
+/// Returns `None` if `data` is too short.
+fn unpack_gray2(data: &[u8], width: u32, height: u32, packed: bool) -> Option<Vec<u8>> {
+    let pixel_count = width.checked_mul(height)? as usize;
+    let mut rgba = Vec::with_capacity(pixel_count * 4);
+
+    if packed {
+        let required_bytes = (pixel_count * 2).div_ceil(8);
+        if data.len() < required_bytes {
+            return None;
+        }
+        for i in 0..pixel_count {
+            let bit_pos = i * 2;
+            let byte_idx = bit_pos / 8;
+            let bit_shift = 6 - (bit_pos % 8); // MSB first, 2-bit groups
+            let val = (data[byte_idx] >> bit_shift) & 0b11;
+            let alpha = val * 85;
+            rgba.extend_from_slice(&[0, 0, 0, alpha]);
+        }
+    } else {
+        // Row-padded: each row is `ceil(width * 2 / 8)` = `ceil(width / 4)` bytes.
+        let row_bytes = ((width as usize) * 2).div_ceil(8);
+        let required_bytes = row_bytes.checked_mul(height as usize)?;
+        if data.len() < required_bytes {
+            return None;
+        }
+        for row in 0..height as usize {
+            let row_start = row * row_bytes;
+            for col in 0..width as usize {
+                let bit_pos = col * 2;
+                let byte_idx = row_start + bit_pos / 8;
+                let bit_shift = 6 - (bit_pos % 8);
+                let val = (data[byte_idx] >> bit_shift) & 0b11;
+                let alpha = val * 85;
+                rgba.extend_from_slice(&[0, 0, 0, alpha]);
+            }
+        }
+    }
+
+    Some(rgba)
+}
+
+/// Unpack a 4-bpp grayscale bitmap into RGBA bytes.
+///
+/// Each 4-bit nibble `v` (0–15) is scaled to alpha by `v * 17`.
+/// Pixel = `RGBA(0, 0, 0, alpha)`.
+///
+/// `packed = false` → rows padded to byte boundary (BitmapGray4).
+/// `packed = true`  → tightly packed (BitmapGray4Packed).
+///
+/// Returns `None` if `data` is too short.
+fn unpack_gray4(data: &[u8], width: u32, height: u32, packed: bool) -> Option<Vec<u8>> {
+    let pixel_count = width.checked_mul(height)? as usize;
+    let mut rgba = Vec::with_capacity(pixel_count * 4);
+
+    if packed {
+        let required_bytes = (pixel_count * 4).div_ceil(8);
+        if data.len() < required_bytes {
+            return None;
+        }
+        for i in 0..pixel_count {
+            let byte_idx = i / 2;
+            let val = if i % 2 == 0 {
+                (data[byte_idx] >> 4) & 0x0F // upper nibble first
+            } else {
+                data[byte_idx] & 0x0F
+            };
+            let alpha = val * 17;
+            rgba.extend_from_slice(&[0, 0, 0, alpha]);
+        }
+    } else {
+        // Row-padded: each row is `ceil(width / 2)` bytes.
+        let row_bytes = (width as usize).div_ceil(2);
+        let required_bytes = row_bytes.checked_mul(height as usize)?;
+        if data.len() < required_bytes {
+            return None;
+        }
+        for row in 0..height as usize {
+            let row_start = row * row_bytes;
+            for col in 0..width as usize {
+                let byte_idx = row_start + col / 2;
+                let val = if col % 2 == 0 {
+                    (data[byte_idx] >> 4) & 0x0F
+                } else {
+                    data[byte_idx] & 0x0F
+                };
+                let alpha = val * 17;
+                rgba.extend_from_slice(&[0, 0, 0, alpha]);
+            }
+        }
+    }
+
+    Some(rgba)
+}
+
+/// Unpack an 8-bpp grayscale bitmap into RGBA bytes.
+///
+/// Each byte is the alpha value. Pixel = `RGBA(0, 0, 0, byte)`.
+///
+/// Returns `None` if `data` is shorter than `width * height`.
+fn unpack_gray8(data: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
+    let pixel_count = width.checked_mul(height)? as usize;
+    if data.len() < pixel_count {
+        return None;
+    }
+    let mut rgba = Vec::with_capacity(pixel_count * 4);
+    for &alpha in &data[..pixel_count] {
+        rgba.extend_from_slice(&[0, 0, 0, alpha]);
+    }
+    Some(rgba)
+}
+
+/// Unpack a 32-bpp premultiplied BGRA bitmap into straight-alpha RGBA bytes.
+///
+/// Each pixel is four bytes in order `[B, G, R, A]` with premultiplied alpha.
+/// Un-premultiplied by: `channel = (channel * 255) / alpha` when `alpha > 0`.
+/// Then bytes are re-ordered to `[R, G, B, A]` for the output RGBA buffer.
+///
+/// Returns `None` if `data` is shorter than `width * height * 4`.
+fn unpack_bgra32(data: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
+    let pixel_count = width.checked_mul(height)? as usize;
+    let required_bytes = pixel_count.checked_mul(4)?;
+    if data.len() < required_bytes {
+        return None;
+    }
+    let mut rgba = Vec::with_capacity(required_bytes);
+    for chunk in data[..required_bytes].chunks(4) {
+        let b_pre = chunk[0];
+        let g_pre = chunk[1];
+        let r_pre = chunk[2];
+        let a = chunk[3];
+        if a == 0 {
+            rgba.extend_from_slice(&[0, 0, 0, 0]);
+        } else {
+            let a_u32 = u32::from(a);
+            let r = ((u32::from(r_pre) * 255 + a_u32 / 2) / a_u32) as u8;
+            let g = ((u32::from(g_pre) * 255 + a_u32 / 2) / a_u32) as u8;
+            let b = ((u32::from(b_pre) * 255 + a_u32 / 2) / a_u32) as u8;
+            rgba.extend_from_slice(&[r, g, b, a]);
+        }
+    }
+    Some(rgba)
 }
 
 /// Decode PNG bytes into `(width, height, rgba_bytes)`.
@@ -352,5 +612,189 @@ mod tests {
                 // the PNG bytes need adjustment, not that the decoder is broken.
             }
         }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Raw CBDT unpacker tests (in-memory, no file I/O)
+    // ---------------------------------------------------------------------------
+
+    /// `unpack_mono` — row-padded (BitmapMono):
+    ///
+    /// 2×2 image, 1 row = ceil(2/8) = 1 byte.
+    /// Row 0: byte 0xC0 = 0b1100_0000 → pixel(0,0)=1(black), pixel(1,0)=1(black)
+    /// Row 1: byte 0x00 = 0b0000_0000 → pixel(0,1)=0(transparent), pixel(1,1)=0(transparent)
+    #[test]
+    fn unpack_mono_row_padded_2x2() {
+        let data: &[u8] = &[0xC0, 0x00];
+        let result = unpack_mono(data, 2, 2, false).expect("should succeed");
+        assert_eq!(result.len(), 16, "2x2 RGBA = 16 bytes");
+        // pixel (0,0): black, opaque
+        assert_eq!(&result[0..4], &[0, 0, 0, 255]);
+        // pixel (1,0): black, opaque
+        assert_eq!(&result[4..8], &[0, 0, 0, 255]);
+        // pixel (0,1): transparent
+        assert_eq!(&result[8..12], &[0, 0, 0, 0]);
+        // pixel (1,1): transparent
+        assert_eq!(&result[12..16], &[0, 0, 0, 0]);
+    }
+
+    /// `unpack_mono` — packed (BitmapMonoPacked):
+    ///
+    /// 4×1 image; packed requires ceil(4/8)=1 byte.
+    /// byte 0xA0 = 0b1010_0000 → pixels: 1, 0, 1, 0
+    #[test]
+    fn unpack_mono_packed_4x1() {
+        let data: &[u8] = &[0xA0];
+        let result = unpack_mono(data, 4, 1, true).expect("should succeed");
+        assert_eq!(result.len(), 16, "4x1 RGBA = 16 bytes");
+        assert_eq!(&result[0..4], &[0, 0, 0, 255], "pixel 0: black");
+        assert_eq!(&result[4..8], &[0, 0, 0, 0], "pixel 1: transparent");
+        assert_eq!(&result[8..12], &[0, 0, 0, 255], "pixel 2: black");
+        assert_eq!(&result[12..16], &[0, 0, 0, 0], "pixel 3: transparent");
+    }
+
+    /// `unpack_mono` returns None when data is too short.
+    #[test]
+    fn unpack_mono_too_short_returns_none() {
+        // 4×4 row-padded needs 4 bytes (1 byte/row), but we supply only 1.
+        assert!(unpack_mono(&[0xFF], 4, 4, false).is_none());
+    }
+
+    /// `unpack_gray2` — row-padded (BitmapGray2):
+    ///
+    /// 2×1 image; row = ceil(2*2/8) = 1 byte.
+    /// byte 0xB0 = 0b1011_0000:
+    ///   bits [7:6] = 0b10 = 2 → alpha = 2*85 = 170
+    ///   bits [5:4] = 0b11 = 3 → alpha = 3*85 = 255
+    #[test]
+    fn unpack_gray2_row_padded_2x1() {
+        let data: &[u8] = &[0xB0];
+        let result = unpack_gray2(data, 2, 1, false).expect("should succeed");
+        assert_eq!(result.len(), 8, "2x1 RGBA = 8 bytes");
+        assert_eq!(&result[0..4], &[0, 0, 0, 170], "pixel 0: alpha=170");
+        assert_eq!(&result[4..8], &[0, 0, 0, 255], "pixel 1: alpha=255");
+    }
+
+    /// `unpack_gray2` — packed (BitmapGray2Packed):
+    ///
+    /// 4×1 image; packed requires ceil(4*2/8) = 1 byte.
+    /// byte 0x1B = 0b0001_1011:
+    ///   bits [7:6] = 0b00 = 0 → alpha = 0
+    ///   bits [5:4] = 0b01 = 1 → alpha = 85
+    ///   bits [3:2] = 0b10 = 2 → alpha = 170
+    ///   bits [1:0] = 0b11 = 3 → alpha = 255
+    #[test]
+    fn unpack_gray2_packed_4x1() {
+        let data: &[u8] = &[0b0001_1011];
+        let result = unpack_gray2(data, 4, 1, true).expect("should succeed");
+        assert_eq!(result.len(), 16, "4x1 RGBA = 16 bytes");
+        assert_eq!(&result[0..4], &[0, 0, 0, 0], "pixel 0: alpha=0");
+        assert_eq!(&result[4..8], &[0, 0, 0, 85], "pixel 1: alpha=85");
+        assert_eq!(&result[8..12], &[0, 0, 0, 170], "pixel 2: alpha=170");
+        assert_eq!(&result[12..16], &[0, 0, 0, 255], "pixel 3: alpha=255");
+    }
+
+    /// `unpack_gray2` returns None when data is too short.
+    #[test]
+    fn unpack_gray2_too_short_returns_none() {
+        // 8×1 packed needs ceil(8*2/8)=2 bytes, we supply 1.
+        assert!(unpack_gray2(&[0xFF], 8, 1, true).is_none());
+    }
+
+    /// `unpack_gray4` — row-padded (BitmapGray4):
+    ///
+    /// 2×1 image; row = ceil(2*4/8) = 1 byte.
+    /// byte 0x5F: upper nibble = 0x5 = 5 → alpha = 5*17 = 85;
+    ///            lower nibble = 0xF = 15 → alpha = 15*17 = 255.
+    #[test]
+    fn unpack_gray4_row_padded_2x1() {
+        let data: &[u8] = &[0x5F];
+        let result = unpack_gray4(data, 2, 1, false).expect("should succeed");
+        assert_eq!(result.len(), 8, "2x1 RGBA = 8 bytes");
+        assert_eq!(&result[0..4], &[0, 0, 0, 85], "pixel 0: alpha=85");
+        assert_eq!(&result[4..8], &[0, 0, 0, 255], "pixel 1: alpha=255");
+    }
+
+    /// `unpack_gray4` — packed (BitmapGray4Packed):
+    ///
+    /// Same encoding, 2×1 packed is also 1 byte — identical to row-padded here.
+    #[test]
+    fn unpack_gray4_packed_2x1() {
+        let data: &[u8] = &[0x0A];
+        let result = unpack_gray4(data, 2, 1, true).expect("should succeed");
+        assert_eq!(result.len(), 8, "2x1 RGBA = 8 bytes");
+        // upper nibble 0x0 = 0 → alpha = 0
+        assert_eq!(&result[0..4], &[0, 0, 0, 0], "pixel 0: alpha=0");
+        // lower nibble 0xA = 10 → alpha = 10*17 = 170
+        assert_eq!(&result[4..8], &[0, 0, 0, 170], "pixel 1: alpha=170");
+    }
+
+    /// `unpack_gray4` returns None when data is too short.
+    #[test]
+    fn unpack_gray4_too_short_returns_none() {
+        // 4×1 row-padded needs ceil(4/2)=2 bytes, we supply 1.
+        assert!(unpack_gray4(&[0xFF], 4, 1, false).is_none());
+    }
+
+    /// `unpack_gray8` — 2×2 image.
+    ///
+    /// Each byte is the alpha. Pixel = RGBA(0, 0, 0, byte).
+    #[test]
+    fn unpack_gray8_2x2() {
+        let data: &[u8] = &[0x00, 0x80, 0xC0, 0xFF];
+        let result = unpack_gray8(data, 2, 2).expect("should succeed");
+        assert_eq!(result.len(), 16, "2x2 RGBA = 16 bytes");
+        assert_eq!(&result[0..4], &[0, 0, 0, 0x00]);
+        assert_eq!(&result[4..8], &[0, 0, 0, 0x80]);
+        assert_eq!(&result[8..12], &[0, 0, 0, 0xC0]);
+        assert_eq!(&result[12..16], &[0, 0, 0, 0xFF]);
+    }
+
+    /// `unpack_gray8` returns None when data is too short.
+    #[test]
+    fn unpack_gray8_too_short_returns_none() {
+        // 2×2 = 4 pixels, we supply only 3 bytes.
+        assert!(unpack_gray8(&[0x00, 0x80, 0xC0], 2, 2).is_none());
+    }
+
+    /// `unpack_bgra32` — opaque red pixel (premultiplied, so r_pre = 128 with a=128
+    /// → un-premultiplied R = (128*255)/128 = 255).
+    ///
+    /// 2×1 image: pixel 0 is opaque red, pixel 1 is transparent.
+    #[test]
+    fn unpack_bgra32_opaque_and_transparent() {
+        // Pixel 0: BGRA premul for opaque red → B=0, G=0, R=255, A=255
+        // Pixel 1: BGRA premul for transparent → B=0, G=0, R=0, A=0
+        let data: &[u8] = &[0, 0, 255, 255, 0, 0, 0, 0];
+        let result = unpack_bgra32(data, 2, 1).expect("should succeed");
+        assert_eq!(result.len(), 8, "2x1 RGBA = 8 bytes");
+        // pixel 0: un-premultiplied from BGRA(0,0,255,255) → RGBA(255,0,0,255)
+        assert_eq!(&result[0..4], &[255, 0, 0, 255], "pixel 0: opaque red");
+        // pixel 1: transparent
+        assert_eq!(&result[4..8], &[0, 0, 0, 0], "pixel 1: transparent");
+    }
+
+    /// `unpack_bgra32` — half-transparent full-green premultiplied:
+    ///
+    /// Premultiplied BGRA(0, 128, 0, 128): α=128 (≈50%).
+    /// Un-premultiplied G = (128*255 + 64) / 128 = (32640 + 64) / 128 = 255.
+    #[test]
+    fn unpack_bgra32_half_transparent_green() {
+        // BGRA: B=0, G=128, R=0, A=128
+        let data: &[u8] = &[0, 128, 0, 128];
+        let result = unpack_bgra32(data, 1, 1).expect("should succeed");
+        assert_eq!(result.len(), 4, "1x1 RGBA = 4 bytes");
+        // Un-premultiplied: R=0, G=255, B=0, A=128
+        assert_eq!(result[0], 0, "R=0");
+        assert_eq!(result[1], 255, "G=255");
+        assert_eq!(result[2], 0, "B=0");
+        assert_eq!(result[3], 128, "A=128");
+    }
+
+    /// `unpack_bgra32` returns None when data is too short.
+    #[test]
+    fn unpack_bgra32_too_short_returns_none() {
+        // 2×1 needs 8 bytes, supply only 4.
+        assert!(unpack_bgra32(&[0, 0, 255, 255], 2, 1).is_none());
     }
 }

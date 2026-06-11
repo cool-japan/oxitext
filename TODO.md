@@ -1,8 +1,8 @@
 # OxiText Project TODO
 
-## Status — v0.1.1 RELEASED (2026-06-04)
+## Status — v0.1.2 (released 2026-06-10)
 
-All milestones M0–M7 complete. 641 tests passing (nextest --all-features), zero warnings, pure Rust default features, MSRV 1.89.
+All milestones M0–M7 complete. 655 tests passing (nextest --all-features), zero warnings, pure Rust default features, MSRV 1.89.
 
 Pure Rust text rendering pipeline: shape, bidi-reorder, line-break, layout, rasterize. 7 crates in workspace. ~4370 Rust SLOC across 41 source files. Covers LTR/RTL text shaping (swash + rustybuzz backends), UAX #9 bidi analysis, UAX #14 line-breaking (now driving word-aware wrapping in the layout engine), vertical text orientation (UAX #50), tate-chu-yoko detection, fontdue/ab_glyph rasterization with subpixel positioning, COLRv0/COLRv1 color glyph compositing, SDF/MSDF/MTSDF atlas generation, ICU4X CLDR segmentation/collation, Unicode normalization (NFC/NFD/NFKC/NFKD), and script-itemization/character-property queries.
 

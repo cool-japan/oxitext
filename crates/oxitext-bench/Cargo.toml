@@ -31,5 +31,5 @@ oxitext-shape = { path = "../oxitext-shape" }
 oxitext-raster = { path = "../oxitext-raster" }
 
 [dependencies]
-pango-sys = { version = "0.22.0", optional = true }
+pango-sys = { workspace = true, optional = true }
 harfbuzz-sys = { workspace = true, optional = true }

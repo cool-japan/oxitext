@@ -5,6 +5,19 @@ All notable changes to OxiText are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-06-10
+
+### Added
+
+- **`oxitext-raster`: full raw CBDT bitmap format support** — `extract_cbdt_bitmap` and `render_cbdt_glyph` now decode all eight raw `RasterImageFormat` variants exposed by ttf-parser: `BitmapMono`, `BitmapMonoPacked`, `BitmapGray2`, `BitmapGray2Packed`, `BitmapGray4`, `BitmapGray4Packed`, `BitmapGray8`, and `BitmapPremulBgra32`. Each format is decoded by a dedicated unpacker function (`unpack_mono`, `unpack_gray2`, `unpack_gray4`, `unpack_gray8`, `unpack_bgra32`). Width and height are taken directly from `ttf_parser::RasterGlyphImage` fields, eliminating the previous `None` fallback for non-PNG bitmaps.
+- **`oxitext-raster`: `unpack_*` public helper functions** — `unpack_mono`, `unpack_gray2`, `unpack_gray4`, `unpack_gray8`, and `unpack_bgra32` are exported for downstream use when raw CBDT pixel data needs to be decoded outside the standard extraction path.
+- **`pango-sys` workspace dependency** — `pango-sys = "0.22.0"` added to workspace dependencies to support ICU/pango-based text segmentation integration in optional downstream crates.
+
+### Changed
+
+- **`oxitext-raster`: `extract_cbdt_bitmap` and `render_cbdt_glyph` API** — both functions now always return `Some` for any supported bitmap format rather than falling back to `None` for raw (non-PNG) CBDT entries. All code paths now use `ttf_parser::RasterImageFormat as Rif` for ergonomic match arms.
+- **Version bump to 0.1.2** — all workspace-internal crate version references updated throughout `Cargo.toml` and in-code doc examples (`oxitext/src/lib.rs`).
+
 ## [0.1.1] - 2026-06-04
 
 ### Added
@@ -109,5 +122,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FFI audit Dockerfile for CI-level purity verification
 - End-to-end conformance tests in `tests/`
 
+[0.1.2]: https://github.com/cool-japan/oxitext/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/cool-japan/oxitext/releases/tag/v0.1.1
 [0.1.0]: https://github.com/cool-japan/oxitext/releases/tag/v0.1.0
