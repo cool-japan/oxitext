@@ -22,13 +22,13 @@
 //!
 //! ```toml
 //! # Minimal: pipeline only
-//! oxitext = { version = "0.1.2", features = ["pure"] }
+//! oxitext = { version = "0.1.3", features = ["pure"] }
 //!
 //! # With SDF atlas for GPU rendering
-//! oxitext = { version = "0.1.2", features = ["pure", "sdf"] }
+//! oxitext = { version = "0.1.3", features = ["pure", "sdf"] }
 //!
 //! # Full: pipeline + ICU + SDF + PNG output
-//! oxitext = { version = "0.1.2", features = ["pure", "sdf", "icu", "png-output"] }
+//! oxitext = { version = "0.1.3", features = ["pure", "sdf", "icu", "png-output"] }
 //! ```
 //!
 //! ### What each feature pulls in

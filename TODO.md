@@ -1,6 +1,6 @@
 # OxiText Project TODO
 
-## Status — v0.1.2 (released 2026-06-10)
+## Status — v0.1.3 (2026-06-19)
 
 All milestones M0–M7 complete. 655 tests passing (nextest --all-features), zero warnings, pure Rust default features, MSRV 1.89.
 

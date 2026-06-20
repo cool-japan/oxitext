@@ -12,16 +12,16 @@ The crate is a thin orchestration layer: nearly everything it exposes is **re-ex
 ```toml
 [dependencies]
 # Default: full Pure-Rust pipeline
-oxitext = "0.1.0"
+oxitext = "0.1.3"
 
 # Explicit minimal pipeline
-oxitext = { version = "0.1.0", features = ["pure"] }
+oxitext = { version = "0.1.3", features = ["pure"] }
 
 # Pipeline + SDF atlas generation for GPU rendering
-oxitext = { version = "0.1.0", features = ["pure", "sdf"] }
+oxitext = { version = "0.1.3", features = ["pure", "sdf"] }
 
 # Everything: pipeline + ICU + SDF + PNG output
-oxitext = { version = "0.1.0", features = ["pure", "sdf", "icu", "png-output"] }
+oxitext = { version = "0.1.3", features = ["pure", "sdf", "icu", "png-output"] }
 ```
 
 ## Quick Start
