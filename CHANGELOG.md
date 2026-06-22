@@ -5,6 +5,13 @@ All notable changes to OxiText are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-06-23
+
+### Changed
+
+- **oxifont ecosystem updated 0.1.x → 0.2.0** — all six oxifont workspace dependencies (`oxifont`, `oxifont-core`, `oxifont-parser`, `oxifont-bundled`, `oxifont-subset`, `oxifont-adapter-native`) updated to 0.2.0, tracking the oxifont 0.2.0 release which brings improved font parsing and adapter APIs.
+- **Workspace version bump 0.1.4 → 0.2.0** — all oxitext workspace crates and internal dependency version references updated to 0.2.0.
+
 ## [0.1.3] - 2026-06-19
 
 ### Changed
@@ -128,6 +135,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FFI audit Dockerfile for CI-level purity verification
 - End-to-end conformance tests in `tests/`
 
+[0.2.0]: https://github.com/cool-japan/oxitext/compare/v0.1.4...v0.2.0
+[0.1.4]: https://github.com/cool-japan/oxitext/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/cool-japan/oxitext/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/cool-japan/oxitext/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/cool-japan/oxitext/releases/tag/v0.1.1

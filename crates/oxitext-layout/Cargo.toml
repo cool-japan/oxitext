@@ -6,6 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "Text layouter for OxiText: LTR/RTL bidi, UAX #14 line-break, vertical CJK (M1/M2)"
 keywords = ["text", "layout", "typography", "oxitext"]
 categories = ["graphics", "text-processing"]

@@ -11,7 +11,7 @@ This crate is **100% Pure Rust** and `#![forbid(unsafe_code)]`. The default font
 
 ```toml
 [dependencies]
-oxitext-raster = "0.1.3"
+oxitext-raster = "0.2.0"
 ```
 
 With optional capabilities:
@@ -19,7 +19,7 @@ With optional capabilities:
 ```toml
 [dependencies]
 # Portable SIMD primitives, swash hinting backend, and SVG-glyph rendering
-oxitext-raster = { version = "0.1.3", features = ["simd", "swash-backend", "svg-backend"] }
+oxitext-raster = { version = "0.2.0", features = ["simd", "swash-backend", "svg-backend"] }
 ```
 
 ## Quick Start

@@ -1,10 +1,10 @@
 # OxiText Project TODO
 
-## Status — v0.1.3 (2026-06-19)
+## Status — v0.2.0 (2026-06-23)
 
 All milestones M0–M7 complete. 655 tests passing (nextest --all-features), zero warnings, pure Rust default features, MSRV 1.89.
 
-Pure Rust text rendering pipeline: shape, bidi-reorder, line-break, layout, rasterize. 7 crates in workspace. ~4370 Rust SLOC across 41 source files. Covers LTR/RTL text shaping (swash + rustybuzz backends), UAX #9 bidi analysis, UAX #14 line-breaking (now driving word-aware wrapping in the layout engine), vertical text orientation (UAX #50), tate-chu-yoko detection, fontdue/ab_glyph rasterization with subpixel positioning, COLRv0/COLRv1 color glyph compositing, SDF/MSDF/MTSDF atlas generation, ICU4X CLDR segmentation/collation, Unicode normalization (NFC/NFD/NFKC/NFKD), and script-itemization/character-property queries.
+Pure Rust text rendering pipeline: shape, bidi-reorder, line-break, layout, rasterize. 7 crates in workspace. ~20,700 Rust SLOC across 86 source files. Covers LTR/RTL text shaping (swash + rustybuzz backends), UAX #9 bidi analysis, UAX #14 line-breaking (now driving word-aware wrapping in the layout engine), vertical text orientation (UAX #50), tate-chu-yoko detection, fontdue/ab_glyph rasterization with subpixel positioning, COLRv0/COLRv1 color glyph compositing, SDF/MSDF/MTSDF atlas generation, ICU4X CLDR segmentation/collation, Unicode normalization (NFC/NFD/NFKC/NFKD), and script-itemization/character-property queries.
 
 ### M6 progress (in this slice)
 - [x] oxitext-core: rich value types — `GlyphMetrics`, `GlyphCluster`, `ColorBitmap`, `RenderOutput`, `TextAlignment`, `WritingMode`, `LineSpacing`, `Decoration`/`DecorationLine`, `Rgba8`, `ParagraphStyle`, `TextRun`, `FontVerticalMetrics`; `ShapedGlyph::{is_whitespace, unsafe_to_break}` flags + `Default`; `PositionedGlyph::font_size`; `Hash` on `FlowDirection`/`TextAlignment`; `TextStyle` builders.

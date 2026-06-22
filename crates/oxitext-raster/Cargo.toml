@@ -6,6 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "Fontdue-based glyph rasterizer for OxiText"
 keywords = ["text", "rasterizer", "fontdue", "bitmap", "oxitext"]
 categories = ["graphics", "rendering"]

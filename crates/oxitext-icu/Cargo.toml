@@ -6,6 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "ICU4X-backed CLDR segmentation and locale-aware collation for OxiText"
 keywords = ["text", "icu", "segmentation", "collation", "oxitext"]
 categories = ["text-processing", "internationalization"]
@@ -38,3 +39,6 @@ oxitext-core    = { workspace = true }
 workspace = true
 optional = true
 features  = ["db"]
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["oxitext-core"]

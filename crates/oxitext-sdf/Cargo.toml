@@ -6,6 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "Signed-distance-field glyph atlas generation for OxiText"
 keywords = ["sdf", "glyph", "distance-field", "typography", "cooljapan"]
 categories = ["graphics", "rendering", "text-processing"]
@@ -22,3 +23,6 @@ ttf-parser     = { workspace = true }
 rayon          = { workspace = true }
 wide           = { workspace = true, optional = true }
 png            = { workspace = true }
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["oxitext-raster"]

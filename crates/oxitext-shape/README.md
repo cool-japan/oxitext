@@ -11,7 +11,7 @@ This crate is **100% Pure Rust** and `#![forbid(unsafe_code)]`. The default shap
 
 ```toml
 [dependencies]
-oxitext-shape = "0.1.3"
+oxitext-shape = "0.2.0"
 ```
 
 With optional capabilities:
@@ -19,7 +19,7 @@ With optional capabilities:
 ```toml
 [dependencies]
 # rustybuzz alternative backend, ICU4X script itemisation, and system-font lookup
-oxitext-shape = { version = "0.1.3", features = ["rustybuzz-backend", "icu", "system-fonts"] }
+oxitext-shape = { version = "0.2.0", features = ["rustybuzz-backend", "icu", "system-fonts"] }
 ```
 
 ## Quick Start

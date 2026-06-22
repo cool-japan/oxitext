@@ -6,6 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "Pure-Rust text rendering pipeline (facade): shape → layout → raster"
 keywords = ["text", "rendering", "typography", "oxitext", "cooljapan"]
 categories = ["graphics", "text-processing", "rendering"]

@@ -6,6 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
 description = "Core traits and value types for OxiText"
 keywords = ["text", "shaping", "layout", "cooljapan", "oxitext"]
 categories = ["graphics", "rendering"]

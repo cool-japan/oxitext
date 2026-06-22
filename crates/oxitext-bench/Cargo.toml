@@ -33,3 +33,6 @@ oxitext-raster = { path = "../oxitext-raster" }
 [dependencies]
 pango-sys = { workspace = true, optional = true }
 harfbuzz-sys = { workspace = true, optional = true }
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["pango-sys"]

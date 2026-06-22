@@ -13,7 +13,7 @@ This crate wraps the **ICU4X** family of crates (`icu_segmenter`, `icu_collator`
 
 ```toml
 [dependencies]
-oxitext-icu = "0.1.3"
+oxitext-icu = "0.2.0"
 ```
 
 This crate has **no default features**; every type is available as soon as the dependency is added.
