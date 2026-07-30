@@ -13,10 +13,10 @@ This crate wraps the **ICU4X** family of crates (`icu_segmenter`, `icu_collator`
 
 ```toml
 [dependencies]
-oxitext-icu = "0.2.0"
+oxitext-icu = "0.2.1"
 ```
 
-This crate has **no default features**; every type is available as soon as the dependency is added.
+This crate has **no default features**; every type is available as soon as the dependency is added. The optional `fonts` feature enables `LocaleFontSelector` (see the API Overview below) for locale-aware font family resolution via `oxifont-db`.
 
 ## Quick Start
 
@@ -135,6 +135,20 @@ assert_eq!(sv.compare("z", "ä"), Ordering::Less);
 | `IcuDateTimeFormatter` | struct | Locale-aware date/time: `format_date`, `format_time`, `format_datetime`, `locale_id`. |
 | `DateLength` | enum | `Full`, `Long`, `Medium` (default), `Short`. |
 | `TimeLength` | enum | `Full`, `Long`, `Medium` (default), `Short`, `None`. |
+
+### Font selection — `font_select` module (`fonts` feature)
+
+| Item | Kind | Description |
+|------|------|-------------|
+| `LocaleFontSelector` | struct | Locale-aware font family selector backed by an `oxifont-db` `FontDatabase`; `Send + Sync` once constructed. |
+| `LocaleFontSelector::from_system()` | fn | Build from the system font catalog (synchronous directory scan). |
+| `LocaleFontSelector::from_db(db)` | fn | Build from a pre-constructed `FontDatabase`. |
+| `family_for_locale(bcp47)` | fn | Canonical family name for the best match; the generic CSS family is derived from the locale's language subtag. |
+| `locale_name_for_locale(bcp47)` | fn | Localised display name (from the font's `name` table) for the best match. |
+| `query_family(bcp47, generic, weight)` | fn | Full CSS Fonts Level 4 match with an explicit generic family and weight. |
+| `families_for_locale(bcp47, generic, weight)` | fn | All candidate family names for a locale/generic pair, deduplicated. |
+| `batch_resolve(locales)` | fn | Resolves `family_for_locale` for multiple locales at once. |
+| `database()` | fn | Returns the underlying `FontDatabase`. |
 
 ### Error type
 

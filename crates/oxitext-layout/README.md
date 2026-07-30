@@ -11,7 +11,7 @@ This crate is **100% Pure Rust** and `#![forbid(unsafe_code)]`. It builds on the
 
 ```toml
 [dependencies]
-oxitext-layout = "0.2.0"
+oxitext-layout = "0.2.1"
 ```
 
 With optional capabilities:
@@ -19,7 +19,7 @@ With optional capabilities:
 ```toml
 [dependencies]
 # Automatic (dictionary) hyphenation and ICU4X/CLDR line breaking
-oxitext-layout = { version = "0.2.0", features = ["hyphenation", "icu"] }
+oxitext-layout = { version = "0.2.1", features = ["hyphenation", "icu"] }
 ```
 
 ## Quick Start
@@ -67,6 +67,14 @@ let result = engine.layout_with_strategy(
 
 println!("{} lines, {}px tall", result.lines.len(), result.metrics.total_height);
 # Ok::<(), oxitext_core::OxiTextError>(())
+```
+
+## Examples
+
+[`examples/word_aware_layout.rs`](examples/word_aware_layout.rs) walks through the primary `LayoutEngine` flow end-to-end: hand-built `ShapedRun`/`ShapedGlyph` input → UAX #14 word wrapping → per-line/paragraph metrics, plus the hand-off to an SDF atlas via `LayoutResult::unique_glyphs_for_atlas`.
+
+```sh
+cargo run -p oxitext-layout --example word_aware_layout
 ```
 
 ## API Overview

@@ -1197,11 +1197,13 @@ impl LayoutEngine {
                 for gi in gs..ge {
                     let cluster = result.glyphs[gi].pos;
                     let char_at_cluster: Option<char> = {
-                        let cluster_off = find_cluster_for_positioned_glyph(
-                            gi - gs,
-                            shaped_runs,
-                            line.glyph_start,
-                        );
+                        // `find_cluster_for_positioned_glyph` walks `shaped_runs`
+                        // from its very first glyph, ignoring `line_glyph_start`,
+                        // so it must be given the glyph's absolute index within
+                        // the flattened run list (which matches `result.glyphs`
+                        // index order), not an index relative to the line.
+                        let cluster_off =
+                            find_cluster_for_positioned_glyph(gi, shaped_runs, line.glyph_start);
                         cluster_off
                             .and_then(|off| source_text.get(off..))
                             .and_then(|s| s.chars().next())
@@ -1214,7 +1216,7 @@ impl LayoutEngine {
                         let next_x = if gi + 1 < ge {
                             result.glyphs[gi + 1].pos.0
                         } else {
-                            let adv = advance_for_glyph(gi - gs, shaped_runs, line.glyph_start);
+                            let adv = advance_for_glyph(gi, shaped_runs, line.glyph_start);
                             cluster.0 + adv
                         };
                         pen = next_x;

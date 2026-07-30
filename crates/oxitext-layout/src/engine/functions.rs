@@ -730,6 +730,52 @@ mod tests {
         );
     }
     #[test]
+    fn layout_with_options_tab_stops_resolve_correct_glyph_on_second_line() {
+        // Regression test for the `layout_with_options` tab-stop handler:
+        // `find_cluster_for_positioned_glyph`/`advance_for_glyph` walk
+        // `shaped_runs` from its very first glyph (they ignore the
+        // `line_glyph_start` argument), so callers must pass the glyph's
+        // *absolute* index within `shaped_runs`/`result.glyphs`, not an
+        // index relative to the line. Passing the line-local index made
+        // every line after the first resolve the wrong source character,
+        // silently missing tab stops.
+        //
+        // `text` forces a mandatory break right after '\n' so line 2 starts
+        // at a non-zero glyph offset, and contains two consecutive tabs so
+        // the tab-stop cascade (each stop computed from the previous one)
+        // gives an unambiguous signal that both tabs on line 2 were
+        // correctly recognised as `\t`.
+        let text = "aa\nbb\t\tcc";
+        let run = run_from_text(text, 10.0);
+        let ts = crate::options::TabStops::with_interval(80.0);
+        let opts = crate::options::LayoutOptions::builder()
+            .tab_stops(ts)
+            .build();
+        let mut engine = LayoutEngine::new();
+        let res = engine
+            .layout_with_options(text, &[run], 10000.0, &opts, None, 16.0)
+            .expect("layout_with_options");
+        assert_eq!(
+            res.lines.len(),
+            2,
+            "mandatory break after '\\n' should yield exactly 2 lines"
+        );
+        let line2 = &res.lines[1];
+        // Line 2 glyphs, in source order: 'b', 'b', '\t', '\t', 'c', 'c'.
+        assert_eq!(line2.len(), 6, "line 2 should have 6 glyphs");
+        let tab2_idx = line2.glyph_start + 3;
+        // The second tab must be positioned at the first tab's snapped stop
+        // (80.0), proving both tabs on this second line were identified as
+        // `\t` and the snap correctly cascaded. With the pre-fix line-local
+        // index, neither tab on line 2 is recognised as `\t` at all, and
+        // the second tab keeps its untouched natural (non-cascaded)
+        // position instead.
+        assert_eq!(
+            res.glyphs[tab2_idx].pos.0, 80.0,
+            "second tab on line 2 must snap forward from the first tab's stop"
+        );
+    }
+    #[test]
     fn truncation_mode_basic() {
         let trunc = crate::options::TruncationMode {
             max_width: 50.0,

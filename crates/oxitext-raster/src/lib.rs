@@ -7,8 +7,14 @@
 //!
 //! # M3 additions
 //!
-//! - [`color`]: COLRv0/CPAL color glyph compositing ([`color::render_colr_v0`],
-//!   [`color::ColorGlyphBitmap`]).
+//! - [`color`]: COLRv0/COLRv1/CPAL color glyph compositing
+//!   ([`color::render_colr_v1`], [`color::ColorGlyphBitmap`]).  Outlines are
+//!   rasterized by the internal `path_raster` module rather than fontdue,
+//!   because fontdue only materialises `cmap`-reachable glyphs and COLR layer
+//!   glyphs are not reachable that way.
+//! - [`colr_cache`]: a thread-local LRU memo for the paint graph, behind
+//!   [`color::render_colr_glyph_sized_cached`] and [`color::render_colr_cached`]
+//!   ([`clear_colr_cache`], [`colr_cache_stats`]).
 //! - [`backend`]: Swappable [`backend::RasterBackend`] trait, with the default
 //!   [`backend::FontdueRaster`], optional [`backend::AbGlyphRaster`]
 //!   (feature `ab-glyph-backend`), and optional [`swash_backend::SwashRaster`]
@@ -42,11 +48,14 @@
 pub mod backend;
 pub mod cache;
 pub mod color;
+pub mod colr_cache;
+mod colr_paint;
 pub mod detect;
 pub mod gamma;
 pub mod lcd;
 pub mod options;
 pub mod outline;
+mod path_raster;
 pub mod result;
 pub mod scalar;
 pub mod simd;
@@ -68,7 +77,12 @@ mod bench_tests;
 
 pub use backend::{FontdueRaster, RasterBackend, RasterOutput};
 pub use cache::{BitmapCache, BitmapCacheKey, RenderMode};
-pub use color::{render_color_glyph, render_colr_v0, render_colr_v1, ColorGlyphBitmap};
+pub use color::{
+    render_color_glyph, render_colr_cached, render_colr_glyph_sized,
+    render_colr_glyph_sized_cached, render_colr_v0, render_colr_v1, render_colr_with_palette,
+    ColorGlyphBitmap, ColorGlyphImage,
+};
+pub use colr_cache::{clear_colr_cache, colr_cache_stats, ColrCacheStats};
 pub use detect::{
     detect_color_glyph_type, extract_cbdt_bitmap, extract_raster_glyph, render_cbdt_glyph,
     ColorGlyphType, RasterImageFormat, RawRasterGlyph,
@@ -188,6 +202,11 @@ impl FontdueRasterizer {
     /// Returns a greyscale [`Bitmap`]. The bitmap may have `width == 0` and
     /// `height == 0` for whitespace glyphs or other non-visible glyphs.
     ///
+    /// The thread-local cache ([`tl_cache::get_or_parse_fontdue`]) is consulted
+    /// first, so the common case takes no lock at all; the `Mutex`-guarded LRU
+    /// below is only reached for font bytes the thread-local cache refuses,
+    /// which is precisely the set fontdue cannot parse.
+    ///
     /// # Errors
     /// - [`OxiTextError::Raster`] if the mutex is poisoned.
     /// - [`OxiTextError::Raster`] if fontdue fails to parse the font.
@@ -197,6 +216,15 @@ impl FontdueRasterizer {
         font_data: &Arc<[u8]>,
         size: f32,
     ) -> Result<Bitmap, OxiTextError> {
+        if let Some(font) = tl_cache::get_or_parse_fontdue(font_data) {
+            let (metrics, pixels) = font.rasterize_indexed(glyph_id, size);
+            return Ok(Bitmap {
+                width: metrics.width as u32,
+                height: metrics.height as u32,
+                pixels,
+            });
+        }
+
         let key = Arc::as_ptr(font_data) as *const u8 as usize;
 
         let mut cache = self

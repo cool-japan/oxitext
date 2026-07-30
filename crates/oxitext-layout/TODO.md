@@ -1,7 +1,9 @@
 # oxitext-layout TODO
 
+_Reviewed for the 0.2.1 release (2026-07-30)._
+
 ## Status
-Text layout engine with 4 submodules: `SimpleLayouter` (LTR cursor-advance with word-wrap), `bidi` (UAX #9 via unicode-bidi), `linebreak` (UAX #14 via unicode-linebreak), `vertical` (UAX #50 upright/rotated classification), and `tate_chu_yoko` (CSS text-combine-upright run detection). ~302 SLOC across lib.rs + 4 modules + tate_chu_yoko.rs. Functional for simple LTR and basic vertical layout. Missing paragraph-level layout, justification, complex line-breaking integration, and rich-text multi-style layout.
+Text layout engine covering bidi reordering (UAX #9, `bidi`/`reorder`), line-breaking (UAX #14 greedy + Knuth-Plass optimal, `linebreak`/`knuth_plass`), a word-aware `LayoutEngine` (`engine::{types,functions}`) with alignment/justification, truncation, tab stops, hanging punctuation, and incremental (dirty-range) relayout, multi-style baseline-aligned rich text (`styled`), vertical CJK flow with `vmtx`-driven advances (UAX #50 subset, `vertical`), tate-chu-yoko run detection (`tate_chu_yoko`), ruby/furigana positioning (`ruby`), and hyphenation (`hyphenation`) — alongside the original M1 cursor-advance `SimpleLayouter`. 14 Rust files, ~4.4K lines under `src/` (tokei). All items below are implemented; see `examples/word_aware_layout.rs` for the primary `LayoutEngine` flow end-to-end.
 
 ## Core Implementation
 - [x] Implement Knuth-Plass optimal line-breaking algorithm: compute paragraph-level optimal break points minimizing total badness with demerits for consecutive hyphenation (~200 SLOC)
@@ -27,6 +29,7 @@ Text layout engine with 4 submodules: `SimpleLayouter` (LTR cursor-advance with 
   - **Goal:** `TabStops{positions:Vec<f32>, default_interval:f32}`. When `\t` glyph encountered, advance cursor to next tab stop. Default interval = 4× space advance.
   - **Files:** `crates/oxitext-layout/src/engine.rs`
   - **Tests:** glyph after \t has x ≥ first tab stop; multiple \t advances to sequential stops
+  - **Fixed (0.2.1):** the `layout_with_options` tab-stop handler was passing a line-relative glyph index into `find_cluster_for_positioned_glyph`/`advance_for_glyph` (both require the *absolute* index into `shaped_runs`), so tab stops on the second and later lines resolved the wrong source character. Both call sites in `src/engine/types.rs` now pass the absolute index `gi`. Regression test: `layout_with_options_tab_stops_resolve_correct_glyph_on_second_line` in `src/engine/functions.rs`.
 - [x] Improve tate_chu_yoko: extract combined advance from vmtx instead of using em_size default (~20 SLOC)
 - [x] Add ruby annotation layout: position ruby text above/below base text for CJK furigana (~80 SLOC)
 - [x] Handle zero-width joiners (ZWJ) and zero-width non-joiners (ZWNJ) correctly during line-breaking (~15 SLOC)
@@ -82,4 +85,5 @@ Text layout engine with 4 submodules: `SimpleLayouter` (LTR cursor-advance with 
 - [x] Feed positioned glyphs to oxitext-raster for per-glyph rasterization
 - [x] Use oxitext-icu's line segmenter as an alternative to unicode-linebreak for CLDR-compliant breaking (`layout_cldr` method behind `icu` feature flag; `layout_with_break_points` for external injection)
 - [x] Coordinate with oxitext-sdf for SDF atlas generation of positioned glyph set
+  - **Demonstrated (0.2.1):** `examples/word_aware_layout.rs` shows the full hand-off end-to-end — `LayoutEngine::layout` → `LayoutResult::unique_glyphs_for_atlas()` — see also `oxitext-sdf`'s `glyph_to_sdf_atlas` example for the receiving side.
 - [x] Accept font metrics for accurate ascender/descender/line-gap values (`LayoutEngine::layout` takes `Option<&FontVerticalMetrics>`; the facade feeds oxifont `ParsedFace::metrics`)

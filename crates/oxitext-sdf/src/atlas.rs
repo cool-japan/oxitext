@@ -5,6 +5,8 @@
 
 use std::collections::HashMap;
 
+use oxitext_core::png_encode::{encode_png, PngColorType};
+
 use crate::edt::SdfError;
 
 /// A single SDF glyph tile produced by the SDF pipeline.
@@ -1137,9 +1139,21 @@ impl SdfAtlas {
                 .map_err(|_| SdfError::InvalidData("cannot read num_entries".into()))?,
         ) as usize;
 
-        // Validate total length.
-        let texture_len = atlas_w as usize * atlas_h as usize;
-        let expected_len = ENTRIES_OFFSET + num_entries * ENTRY_SIZE + texture_len;
+        // Validate total length. All three components come straight from an
+        // untrusted header, so compute the sum with checked arithmetic: a
+        // wraparound here would shrink `expected_len` below the real
+        // requirement and let the length guard below pass, leading to an
+        // out-of-bounds slice panic further down.
+        let texture_len = (atlas_w as usize)
+            .checked_mul(atlas_h as usize)
+            .ok_or_else(|| SdfError::InvalidData("atlas_w * atlas_h overflows".into()))?;
+        let entries_len = num_entries
+            .checked_mul(ENTRY_SIZE)
+            .ok_or_else(|| SdfError::InvalidData("num_entries * entry size overflows".into()))?;
+        let expected_len = ENTRIES_OFFSET
+            .checked_add(entries_len)
+            .and_then(|len| len.checked_add(texture_len))
+            .ok_or_else(|| SdfError::InvalidData("declared atlas size overflows".into()))?;
         if data.len() < expected_len {
             return Err(SdfError::InvalidData(format!(
                 "buffer too short: expected {expected_len} bytes, got {}",
@@ -1189,8 +1203,9 @@ impl SdfAtlas {
             );
         }
 
-        // Read texture.
-        let tex_start = ENTRIES_OFFSET + num_entries * ENTRY_SIZE;
+        // Read texture. `entries_len` and `texture_len` were already validated
+        // above (via `expected_len`) not to overflow and to fit within `data`.
+        let tex_start = ENTRIES_OFFSET + entries_len;
         let texture = data[tex_start..tex_start + texture_len].to_vec();
 
         Ok(Self {
@@ -1227,19 +1242,20 @@ impl SdfAtlas {
     ///
     /// Each pixel value is the SDF distance encoded as a greyscale byte
     /// (`0` = far outside, `128` = boundary, `255` = far inside).
+    ///
+    /// # Errors
+    /// Returns [`SdfError::Io`] if the texture length does not match
+    /// `width × height`, if PNG encoding fails, or if the file cannot be
+    /// written.
     pub fn export_png(&self, path: &std::path::Path) -> Result<(), SdfError> {
-        use std::io::BufWriter;
-        let file = std::fs::File::create(path).map_err(|e| SdfError::Io(e.to_string()))?;
-        let w = BufWriter::new(file);
-        let mut encoder = png::Encoder::new(w, self.width, self.height);
-        encoder.set_color(png::ColorType::Grayscale);
-        encoder.set_depth(png::BitDepth::Eight);
-        let mut writer = encoder
-            .write_header()
-            .map_err(|e| SdfError::Io(e.to_string()))?;
-        writer
-            .write_image_data(&self.texture)
-            .map_err(|e| SdfError::Io(e.to_string()))
+        let bytes = encode_png(
+            self.width,
+            self.height,
+            PngColorType::Grayscale8,
+            &self.texture,
+        )
+        .map_err(|e| SdfError::Io(e.to_string()))?;
+        std::fs::write(path, bytes).map_err(|e| SdfError::Io(e.to_string()))
     }
 }
 
@@ -1340,19 +1356,15 @@ impl MsdfAtlas {
     ///
     /// The texture is stored as RGB (3 bytes per pixel). Each channel encodes
     /// a signed distance for the corresponding colored edge of the glyph outline.
+    ///
+    /// # Errors
+    /// Returns [`SdfError::Io`] if the texture length does not match
+    /// `width × height × 3`, if PNG encoding fails, or if the file cannot be
+    /// written.
     pub fn export_png(&self, path: &std::path::Path) -> Result<(), SdfError> {
-        use std::io::BufWriter;
-        let file = std::fs::File::create(path).map_err(|e| SdfError::Io(e.to_string()))?;
-        let w = BufWriter::new(file);
-        let mut encoder = png::Encoder::new(w, self.width, self.height);
-        encoder.set_color(png::ColorType::Rgb);
-        encoder.set_depth(png::BitDepth::Eight);
-        let mut writer = encoder
-            .write_header()
+        let bytes = encode_png(self.width, self.height, PngColorType::Rgb8, &self.texture)
             .map_err(|e| SdfError::Io(e.to_string()))?;
-        writer
-            .write_image_data(&self.texture)
-            .map_err(|e| SdfError::Io(e.to_string()))
+        std::fs::write(path, bytes).map_err(|e| SdfError::Io(e.to_string()))
     }
 }
 
@@ -1582,6 +1594,30 @@ mod tests {
         assert_eq!(atlas.width, 256);
         assert_eq!(atlas.height, 256);
         assert!(atlas.texture.capacity() >= atlas.texture.len());
+    }
+
+    #[test]
+    fn from_bytes_rejects_overflowing_header_without_panicking() {
+        // Regression test: `expected_len = ENTRIES_OFFSET + num_entries *
+        // ENTRY_SIZE + texture_len` is computed from three untrusted header
+        // fields. With plain `usize` arithmetic this can overflow, wrap
+        // around to a small value, sail past the `data.len() < expected_len`
+        // guard, and later panic on an out-of-bounds slice (or, in a debug
+        // build, panic immediately on the overflowing addition). It must
+        // instead be rejected cleanly via `SdfError::InvalidData`.
+        let mut data = Vec::with_capacity(ENTRIES_OFFSET);
+        data.extend_from_slice(MAGIC); // magic
+        data.extend_from_slice(&VERSION.to_le_bytes()); // version
+        data.extend_from_slice(&u32::MAX.to_le_bytes()); // atlas_w
+        data.extend_from_slice(&u32::MAX.to_le_bytes()); // atlas_h
+        data.extend_from_slice(&u32::MAX.to_le_bytes()); // num_entries
+        assert_eq!(data.len(), ENTRIES_OFFSET);
+
+        match SdfAtlas::from_bytes(&data) {
+            Err(SdfError::InvalidData(_)) => {}
+            Err(other) => panic!("expected InvalidData, got a different SdfError: {other}"),
+            Ok(_) => panic!("overflowing header must not be accepted"),
+        }
     }
 
     #[test]

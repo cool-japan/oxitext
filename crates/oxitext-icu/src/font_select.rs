@@ -27,7 +27,7 @@
 //! # {
 //! use oxitext_icu::font_select::LocaleFontSelector;
 //!
-//! let selector = LocaleFontSelector::from_system().unwrap();
+//! let selector = LocaleFontSelector::from_system().expect("system font database");
 //!
 //! // Resolve the best sans-serif family for Japanese.
 //! if let Some(name) = selector.family_for_locale("ja-JP") {

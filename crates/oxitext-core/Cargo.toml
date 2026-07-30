@@ -15,10 +15,18 @@ categories = ["graphics", "rendering"]
 default = ["std"]
 std = []
 serde = ["dep:serde"]
+## Enables [`png_encode`], a self-contained 8-bit PNG writer built on the
+## COOLJAPAN `oxiarc` compression stack (`oxiarc-deflate` for the zlib stream,
+## `oxiarc-core` for CRC-32). Deliberately *not* the `png` crate: that one pulls
+## `flate2` + `miniz_oxide`, which this repository's `deny.toml` bans.
+## Requires `std` because the compressor is a `std` crate.
+png-encode = ["std", "dep:oxiarc-core", "dep:oxiarc-deflate"]
 
 [dependencies]
 serde = { workspace = true, optional = true }
 smallvec = { workspace = true }
+oxiarc-core = { workspace = true, optional = true }
+oxiarc-deflate = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

@@ -7,9 +7,9 @@
 Pure-Rust crates. OxiText complements **OxiFont** (font parsing + discovery)
 and is consumed by every Oxi*** subsystem that draws or measures text.
 
-## Status: 0.2.0 — 2026-06-23
+## Status: 0.2.1 — 2026-07-30
 
-All milestones M0–M7 are complete. **655 tests passing** (nextest, all-features).
+All milestones M0–M7 are complete. **772 tests passing** (nextest, all-features).
 Zero warnings, pure Rust default features, MSRV 1.89.
 
 ### What is implemented
@@ -50,7 +50,7 @@ oxitext-bench     — criterion benchmarks (publish = false)
 
 ```toml
 [dependencies]
-oxitext = "0.2.0"  # latest stable
+oxitext = "0.2.1"  # latest stable
 ```
 
 ```rust
@@ -137,7 +137,7 @@ OxiUI/wgpu consuming the `oxitext-sdf` atlas output.
 
 ## Workspace
 
-- Version: **0.2.0** (2026-06-23)
+- Version: **0.2.1** (2026-07-30)
 - Edition: **2021**
 - MSRV: **1.89**
 - License: **Apache-2.0**

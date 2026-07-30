@@ -3,15 +3,15 @@
 [![Crates.io](https://img.shields.io/crates/v/oxitext-raster.svg)](https://crates.io/crates/oxitext-raster)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-`oxitext-raster` is the **rasterization** stage of the OxiText pipeline: it turns glyph IDs and font bytes into `oxitext_core::Bitmap` coverage maps (and color, LCD, and SDF-ready output). The default backend wraps [fontdue](https://crates.io/crates/fontdue); optional backends add `ab_glyph`, swash (with TrueType hinting), SVG-in-OpenType rendering, and an `oxifont` backend. It also includes COLR/CPAL color compositing, CBDT/sbix raster-glyph extraction, glyph-outline extraction, full LCD subpixel rendering, sRGB gamma LUTs, FreeType-style stem darkening, quarter-pixel positioning, and SIMD-accelerated coverage/compositing primitives.
+`oxitext-raster` is the **rasterization** stage of the OxiText pipeline: it turns glyph IDs and font bytes into `oxitext_core::Bitmap` coverage maps (and color, LCD, and SDF-ready output). The default backend wraps [fontdue](https://crates.io/crates/fontdue); optional backends add `ab_glyph`, swash (with TrueType hinting), SVG-in-OpenType rendering, and an `oxifont` backend. It also includes full COLRv0/COLRv1/CPAL color glyph compositing — linear/radial/sweep gradients, the `PaintTransform`/`PaintScale*`/`PaintRotate*`/`PaintSkew*` transform stack, `PaintGlyph`/`ClipList` clipping, and all 28 Porter-Duff/CSS `PaintComposite` modes — plus CBDT/CBLC/sbix bitmap-glyph extraction, glyph-outline extraction, full LCD subpixel rendering, sRGB gamma LUTs, FreeType-style stem darkening, quarter-pixel positioning, and SIMD-accelerated coverage/compositing primitives.
 
-This crate is **100% Pure Rust** and `#![forbid(unsafe_code)]`. The default fontdue path carries no C/C++ dependencies; `png` and `ttf-parser` are likewise Pure Rust. Optional features pull in `wide` (portable SIMD), `swash`, `resvg`/`tiny-skia`, and the `oxifont` parser. It consumes `PositionedGlyph` / `Bitmap` / `RenderOutput` from [`oxitext-core`](https://crates.io/crates/oxitext-core).
+This crate is **100% Pure Rust** and `#![forbid(unsafe_code)]`. The default fontdue path carries no C/C++ dependencies; `ttf-parser` is likewise Pure Rust. Optional features pull in `wide` (portable SIMD), `swash`, `resvg`/`tiny-skia`, the `oxifont` parser, and — only behind the opt-in `png-bitmap` feature — `png`, for decoding PNG-compressed CBDT/sbix bitmap strikes. It consumes `PositionedGlyph` / `Bitmap` / `RenderOutput` from [`oxitext-core`](https://crates.io/crates/oxitext-core).
 
 ## Installation
 
 ```toml
 [dependencies]
-oxitext-raster = "0.2.0"
+oxitext-raster = "0.2.1"
 ```
 
 With optional capabilities:
@@ -19,7 +19,7 @@ With optional capabilities:
 ```toml
 [dependencies]
 # Portable SIMD primitives, swash hinting backend, and SVG-glyph rendering
-oxitext-raster = { version = "0.2.0", features = ["simd", "swash-backend", "svg-backend"] }
+oxitext-raster = { version = "0.2.1", features = ["simd", "swash-backend", "svg-backend"] }
 ```
 
 ## Quick Start
@@ -35,7 +35,7 @@ let font_data: Arc<[u8]> = Arc::from(std::fs::read("font.ttf")?.as_slice());
 let rasterizer = FontdueRasterizer::new();
 let bitmap = rasterizer.raster(36, &font_data, 32.0)?; // glyph id 36 at 32px
 println!("{}x{} coverage bitmap", bitmap.width, bitmap.height);
-# Ok::<(), oxitext_core::OxiTextError>(())
+# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 ### Rasterize pre-laid-out glyphs
@@ -50,6 +50,35 @@ let options = RasterOptions::default();
 let bitmaps = rasterize_positioned(&glyphs, &options);
 assert_eq!(bitmaps.len(), glyphs.len()); // one Option<Bitmap> per glyph
 ```
+
+### Render a COLR/CPAL color (emoji) glyph
+
+`render_colr_glyph_sized` sizes the output from the glyph's own paint box —
+rather than a fixed preview square — so gradients, transforms and composite
+layers that paint outside a naive 1em box are not clipped. It covers both
+COLRv0 and COLRv1 (ttf-parser dispatches on the table version internally).
+
+```rust,no_run
+use oxitext_raster::render_colr_glyph_sized;
+
+let font_data = std::fs::read("emoji-font.ttf")?;
+let glyph_id: u16 = 42; // resolved via cmap/shaping for the emoji codepoint
+let palette = 0; // default CPAL palette
+
+if let Some(img) = render_colr_glyph_sized(&font_data, glyph_id, 64.0, palette) {
+    // `img.rgba` is straight (non-premultiplied) RGBA, trimmed to ink.
+    println!(
+        "{}x{} color glyph, bearing ({}, {})",
+        img.width, img.height, img.bearing_x, img.bearing_y
+    );
+}
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+Callers that hold their font bytes in an `Arc<[u8]>` (e.g. a caption renderer
+drawing the same emoji every frame) should prefer
+`render_colr_glyph_sized_cached`, which memoizes the paint graph per thread
+and returns a shared `Arc<ColorGlyphImage>` on a cache hit.
 
 ## API Overview
 
@@ -107,15 +136,22 @@ assert_eq!(bitmaps.len(), glyphs.len()); // one Option<Bitmap> per glyph
 | `SubpixelOffsetXY` | 2-D subpixel pen position; `new(x, y)` |
 | `SubpixelCacheKey` | Glyph + size + subpixel cache key; `new(glyph_id, px_size, x_offset)` |
 
-### Color glyphs — `color` and `detect` modules
+### Color glyphs — `color`, `colr_cache`, and `detect` modules
+
+COLR layer glyphs are rasterized by an internal `path_raster` scanline rasterizer working directly off `ttf-parser` outlines, not fontdue — fontdue only materializes glyphs reachable from the font's `cmap`, and COLR layer glyphs are deliberately not mapped from any codepoint, so routing them through fontdue previously produced fully transparent output for every color emoji. Paint-graph interpretation (transform stack, clip stack, layer stack, gradients, composite modes) lives in an internal `colr_paint` module.
 
 | Item | Description |
 |------|-------------|
-| `color::render_colr_v0(...)`, `render_colr_v1(...)`, `render_color_glyph(...)` | Composite COLR/CPAL color glyphs (v0 layered, v1 gradients) |
-| `color::ColorGlyphBitmap` | RGBA color-glyph output |
-| `detect::detect_color_glyph_type(face_data, glyph_id)` → `ColorGlyphType` | Detect the color-glyph technology present |
-| `detect::extract_cbdt_bitmap(...)`, `render_cbdt_glyph(...)` | CBDT embedded-bitmap extraction/rendering |
-| `detect::extract_raster_glyph(...)` → `RawRasterGlyph` | Extract an embedded raster glyph (`RasterImageFormat`) |
+| `color::render_colr_v0(...)`, `render_colr_v1(...)` | Render a COLR (v0 or v1) base glyph into a fixed-size RGBA bitmap. ttf-parser dispatches on the table version internally, so both entry points drive the full paint graph — gradients, transforms, clipping, composite modes — for a COLRv1 font |
+| `color::render_colr_with_palette(...)` | Like `render_colr_v1`, against an explicit (non-default) CPAL palette index |
+| `color::render_colr_glyph_sized(...)` → `ColorGlyphImage` | Sizes the bitmap from the glyph's own paint box (`ClipList` entry, else outline bbox, else a margin around the em) instead of a fixed preview square, trims it to ink, and reports the bearings needed to place it against a baseline |
+| `color::render_colr_cached(...)`, `render_colr_glyph_sized_cached(...)` | Thread-local LRU-memoized counterparts of `render_colr_with_palette` / `render_colr_glyph_sized`, keyed on `Arc<[u8]>` font identity; a hit returns a shared `Arc` and copies no pixels |
+| `color::render_color_glyph(...)` | Dispatch to the best available representation: SVG (feature `svg-backend`) → CBDT/CBLC/sbix → COLRv1/v0 |
+| `color::ColorGlyphBitmap` | Fixed-size RGBA color-glyph output (`width`, `height`, `rgba`) |
+| `colr_cache::clear_colr_cache()`, `colr_cache_stats()` → `ColrCacheStats` | Drop, or inspect (hits/misses/entries/bytes), the thread-local COLR paint-graph memo |
+| `detect::detect_color_glyph_type(face_data, glyph_id)` → `ColorGlyphType` | Detect the color-glyph technology present (`Sbix` > `Svg` > `EmbeddedBitmap` > `ColrV1` > `ColrV0` > `None`) |
+| `detect::extract_cbdt_bitmap(...)`, `render_cbdt_glyph(...)` | CBDT/CBLC bitmap extraction/rendering; PNG-encoded strikes (format 17/18/19) need feature `png-bitmap`, the 8 raw bitmap formats (`BitmapMono[Packed]`, `BitmapGray2/4/8[Packed]`, `BitmapPremulBgra32`) decode unconditionally |
+| `detect::extract_raster_glyph(...)` → `RawRasterGlyph` | Extract an embedded raster glyph (CBDT or sbix) undecoded, as raw bytes tagged with `RasterImageFormat` |
 
 ### Glyph outlines — `outline` module
 
@@ -166,6 +202,7 @@ assert_eq!(bitmaps.len(), glyphs.len()); // one Option<Bitmap> per glyph
 | `swash-backend` | no | Adds the `SwashRaster` hinting backend (pulls in `swash`) |
 | `svg-backend` | no | SVG-in-OpenType glyph rendering via `resvg` + `tiny-skia` |
 | `oxifont-backend` | no | Adds the `OxifontRaster` backend (pulls in `oxifont-parser` / `oxifont-core` + `tiny-skia`) |
+| `png-bitmap` | no | Decode PNG-compressed CBDT/CBLC and sbix bitmap strikes (pulls in `png`). Off by default: `png` pulls `flate2` → `miniz_oxide`, both banned by this repository's `deny.toml` in favor of the `oxiarc-*` stack. Uncompressed CBDT bitmap formats and COLRv0/v1 vector color glyphs are unaffected and need no feature |
 
 ## Error variants
 

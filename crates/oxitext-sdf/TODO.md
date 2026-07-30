@@ -1,7 +1,7 @@
 # oxitext-sdf TODO
 
 ## Status
-Signed Distance Field glyph atlas generation. Implements Felzenszwalb-Huttenlocher 2D EDT for computing SDFs from coverage bitmaps. Shelf-packing atlas builder for GPU-ready SDF textures with UV coordinate mapping. MSDF pipeline (msdf.rs) with Chlumsky edge coloring, OutlineCollector via ttf-parser, Newton-Raphson closest-point on Bezier curves, and MsdfAtlas packer. Bilinear resampling in glyph_to_sdf_tile. Configurable spread and padding in compute_sdf. ~770 SLOC (msdf.rs) + ~196 SLOC (edt.rs) + ~241 SLOC (atlas.rs) + ~123 SLOC (lib.rs). All 14 tests pass, zero clippy warnings.
+Signed Distance Field glyph atlas generation. Implements Felzenszwalb-Huttenlocher 2D EDT for computing SDFs from coverage bitmaps. Shelf-packing atlas builder for GPU-ready SDF textures with UV coordinate mapping. MSDF pipeline (msdf.rs) with Chlumsky edge coloring, OutlineCollector via ttf-parser, Newton-Raphson closest-point on Bezier curves, and MsdfAtlas packer. Bilinear resampling in glyph_to_sdf_tile. Configurable spread and padding in compute_sdf. ~770 SLOC (msdf.rs) + ~196 SLOC (edt.rs) + ~241 SLOC (atlas.rs) + ~123 SLOC (lib.rs). All 61 tests pass, zero clippy warnings.
 
 ## Core Implementation
 - [x] Implement multi-channel SDF (MSDF): generate 3-channel (RGB) distance field for sharper corner rendering at low resolutions (~200 SLOC)

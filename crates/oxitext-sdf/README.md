@@ -11,14 +11,14 @@ The crate is **100% Pure Rust** — no C/C++ dependencies. It implements the Fel
 
 ```toml
 [dependencies]
-oxitext-sdf = "0.2.0"
+oxitext-sdf = "0.2.1"
 ```
 
 ### Feature flags
 
 ```toml
 # SIMD-accelerated EDT inner loop (pulls in the `wide` crate)
-oxitext-sdf = { version = "0.2.0", features = ["simd"] }
+oxitext-sdf = { version = "0.2.1", features = ["simd"] }
 ```
 
 | Feature | Default | Effect |
@@ -70,6 +70,14 @@ assert_eq!(desc.format, GpuAtlasFormat::Rgb8Unorm);
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
+## Examples
+
+[`examples/glyph_to_sdf_atlas.rs`](examples/glyph_to_sdf_atlas.rs) walks through both generation paths end-to-end: the runtime path (`glyph_to_sdf_tile_analytic` on a real glyph outline → pack into an `SdfAtlas` → `to_bytes`/`from_bytes` round trip) and the build-time path (`generate_ascii_atlas`, meant to be called from a `build.rs` script to pre-bake an atlas for `include_bytes!`).
+
+```sh
+cargo run -p oxitext-sdf --example glyph_to_sdf_atlas
+```
+
 ## API Overview
 
 ### Single-channel SDF (coverage-based)
@@ -119,7 +127,7 @@ assert_eq!(desc.format, GpuAtlasFormat::Rgb8Unorm);
 | `SdfAtlas::export_png(path)` | fn | Write the atlas texture as a greyscale PNG. |
 | `MsdfAtlas` | struct | Multi-channel atlas; `MsdfAtlas::pack(tiles, atlas_size)`, `export_png(path)`. |
 | `MultiPageAtlas` | struct | Multi-page packer for tile sets that exceed one texture; `pack(tiles, page_size, padding)`, `lookup(glyph_id) -> Option<(page, &UvRect)>`. |
-| `pack_growing(tiles, initial_size, max_size, padding)` | fn | Free-function growing packer. |
+| `pack_growing(tiles, initial_size, max_size, padding, algorithm)` | fn | Free-function growing packer. |
 | `UvRect` | struct | `u_min`, `v_min`, `u_max`, `v_max` (all in `[0, 1]`). |
 | `AtlasOptions` | struct | `atlas_size`, `padding`, `max_size`, `algorithm`. |
 | `AtlasStats` | struct | `tiles_packed`, `tiles_dropped`, `utilization`, `wasted_pixels`. |

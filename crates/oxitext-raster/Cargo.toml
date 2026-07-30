@@ -17,6 +17,15 @@ simd             = ["dep:wide"]
 swash-backend    = ["dep:swash"]
 svg-backend      = ["dep:resvg", "dep:tiny-skia"]
 oxifont-backend  = ["dep:oxifont-parser", "dep:oxifont-core", "dep:tiny-skia"]
+## Decode PNG-compressed CBDT/CBLC and sbix strikes (color-bitmap emoji fonts
+## such as the Apple/Google `NotoColorEmoji` CBDT builds).
+##
+## Off by default: the `png` crate pulls `flate2` + `miniz_oxide`, both of which
+## this repository's own `deny.toml` bans in favour of the `oxiarc-*` stack. All
+## other raster paths -- outlines, COLRv0/v1, and the uncompressed CBDT
+## mono/gray2/gray4/gray8/BGRA32 strike formats -- are unaffected and stay
+## available without this feature.
+png-bitmap       = ["dep:png"]
 
 [dependencies]
 oxitext-core    = { workspace = true }
@@ -24,7 +33,7 @@ fontdue         = { workspace = true }
 ttf-parser      = { workspace = true }
 ab_glyph        = { workspace = true }
 lru             = { workspace = true }
-png             = { workspace = true }
+png             = { workspace = true, optional = true }
 wide            = { workspace = true, optional = true }
 swash           = { workspace = true, optional = true }
 resvg           = { workspace = true, optional = true }

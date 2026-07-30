@@ -25,8 +25,15 @@ sdf         = ["dep:oxitext-sdf"]
 icu         = ["dep:oxitext-icu", "oxitext-layout/icu"]
 simd        = ["oxitext-raster/simd"]
 parallel    = ["pure", "dep:rayon"]
-png-output  = ["dep:png"]
+## `RenderResult::to_png`. Backed by `oxitext-core`'s own PNG writer (the
+## `oxiarc` deflate stack), so it adds no banned `flate2`/`miniz_oxide` edge.
+png-output  = ["oxitext-core/png-encode"]
 font-subset = ["dep:oxifont-subset"]
+## Decode PNG-compressed CBDT/sbix colour-bitmap strikes (e.g. the CBDT builds
+## of NotoColorEmoji). Off by default because it pulls `png` -> `flate2` +
+## `miniz_oxide`, which this repository's `deny.toml` bans. COLRv0/v1 vector
+## emoji need no such dependency and work in the default build.
+color-bitmap-fonts = ["pure", "oxitext-raster/png-bitmap"]
 
 [dependencies]
 oxitext-core   = { workspace = true }
@@ -37,7 +44,6 @@ oxitext-raster = { workspace = true, optional = true }
 oxitext-sdf    = { workspace = true, optional = true }
 oxitext-icu    = { workspace = true, optional = true }
 rayon          = { workspace = true, optional = true }
-png            = { workspace = true, optional = true }
 oxifont-subset = { workspace = true, optional = true }
 ttf-parser     = { workspace = true }
 oxifont        = { workspace = true }

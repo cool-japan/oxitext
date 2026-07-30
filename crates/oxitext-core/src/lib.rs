@@ -18,6 +18,13 @@ use std::sync::Arc;
 
 use smallvec::SmallVec;
 
+/// Pure-Rust 8-bit PNG writer (feature `png-encode`).
+///
+/// Built on `oxiarc-deflate`/`oxiarc-core` so that PNG output never pulls the
+/// `flate2` + `miniz_oxide` pair banned by this repository's `deny.toml`.
+#[cfg(feature = "png-encode")]
+pub mod png_encode;
+
 /// A glyph produced by the shaper.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

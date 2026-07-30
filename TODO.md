@@ -1,10 +1,10 @@
 # OxiText Project TODO
 
-## Status — v0.2.0 (2026-06-23)
+## Status — v0.2.1 (2026-07-30)
 
-All milestones M0–M7 complete. 655 tests passing (nextest --all-features), zero warnings, pure Rust default features, MSRV 1.89.
+All milestones M0–M7 complete. 772 tests passing (nextest --all-features), zero warnings, pure Rust default features, MSRV 1.89.
 
-Pure Rust text rendering pipeline: shape, bidi-reorder, line-break, layout, rasterize. 7 crates in workspace. ~20,700 Rust SLOC across 86 source files. Covers LTR/RTL text shaping (swash + rustybuzz backends), UAX #9 bidi analysis, UAX #14 line-breaking (now driving word-aware wrapping in the layout engine), vertical text orientation (UAX #50), tate-chu-yoko detection, fontdue/ab_glyph rasterization with subpixel positioning, COLRv0/COLRv1 color glyph compositing, SDF/MSDF/MTSDF atlas generation, ICU4X CLDR segmentation/collation, Unicode normalization (NFC/NFD/NFKC/NFKD), and script-itemization/character-property queries.
+Pure Rust text rendering pipeline: shape, bidi-reorder, line-break, layout, rasterize. 7 crates in workspace. ~24,600 Rust SLOC across 96 source files. Covers LTR/RTL text shaping (swash + rustybuzz backends), UAX #9 bidi analysis, UAX #14 line-breaking (now driving word-aware wrapping in the layout engine), vertical text orientation (UAX #50), tate-chu-yoko detection, fontdue/ab_glyph rasterization with subpixel positioning, COLRv0/COLRv1 color glyph compositing (paint transforms, clips, all 28 composite modes, cached), SDF/MSDF/MTSDF atlas generation, ICU4X CLDR segmentation/collation, Unicode normalization (NFC/NFD/NFKC/NFKD), and script-itemization/character-property queries.
 
 ### M6 progress (in this slice)
 - [x] oxitext-core: rich value types — `GlyphMetrics`, `GlyphCluster`, `ColorBitmap`, `RenderOutput`, `TextAlignment`, `WritingMode`, `LineSpacing`, `Decoration`/`DecorationLine`, `Rgba8`, `ParagraphStyle`, `TextRun`, `FontVerticalMetrics`; `ShapedGlyph::{is_whitespace, unsafe_to_break}` flags + `Default`; `PositionedGlyph::font_size`; `Hash` on `FlowDirection`/`TextAlignment`; `TextStyle` builders.
@@ -83,3 +83,16 @@ See individual TODO.md files in each subcrate directory:
 - `crates/oxitext-icu/TODO.md`
 - `crates/oxitext/TODO.md`
 
+
+
+---
+
+<!-- production-readiness-backlog 2026-07-16 -->
+## Production-Readiness Backlog — 2026-07-16
+
+_Consolidated from static audit + Opus adversarial bug-hunt (48 verified defects across noffi) + baseline nextest/clippy + design investigation. See `../NOFFI_PRODUCTION_BACKLOG.md` for the full cross-project list and severity/model legend. Not implemented; no commits._
+
+**Confirmed bugs — Opus-verified:**
+- [x] **A · high** `oxitext-layout/src/engine/types.rs:1200` — tab-stop handling passes line-local glyph index `(gi-gs)` to helpers that count from the global run start (ignore line_glyph_start) → every line after the first reads the wrong source glyph. R2/N0 — fixed in 0.2.1: both call sites now pass the absolute glyph index; regression test `layout_with_options_tab_stops_resolve_correct_glyph_on_second_line`.
+- [x] **S · med** `oxitext-sdf/src/atlas.rs:1142` — `from_bytes` `expected_len = OFFSET + num_entries*ENTRY_SIZE + texture_len` from untrusted header can overflow usize → wraps small, bypasses guard → OOB slice panic. R2/N0 — fixed in 0.2.1: length computation uses `checked_mul`/`checked_add`, returns `SdfError::InvalidData` on overflow; regression test `from_bytes_rejects_overflowing_header_without_panicking`.
+- [x] **B · L2** otherwise baseline GREEN (604 pass); add examples if thin. — added `oxitext-layout/examples/word_aware_layout.rs` and `oxitext-sdf/examples/glyph_to_sdf_atlas.rs` in 0.2.1; baseline now 772 pass (all-features).

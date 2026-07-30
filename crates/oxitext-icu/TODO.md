@@ -1,7 +1,7 @@
 # oxitext-icu TODO
 
 ## Status
-ICU4X-backed CLDR segmentation and locale-aware collation. `IcuSegmenter` wraps 4 ICU4X segmenters (line, word, grapheme-cluster, sentence) using compiled CLDR data with LSTM/dictionary models for complex scripts. `IcuCollator` wraps `icu_collator::Collator` for Unicode Collation Algorithm with locale-aware string comparison. ~87 SLOC (segment.rs) + ~74 SLOC (collate.rs). Functionally complete for basic segmentation and collation but missing normalization, case mapping, locale-aware formatting, and text transforms.
+Version 0.2.1 (2026-07-30). ICU4X-backed Unicode/CLDR services layer for OxiText. `IcuSegmenter` wraps 4 ICU4X segmenters (line, word, grapheme-cluster, sentence) using compiled CLDR data with LSTM/dictionary models for complex scripts (Thai, Khmer, Lao, Myanmar, Japanese, CJK). `IcuCollator` wraps `icu_collator::Collator` for the Unicode Collation Algorithm with strength control and sort-key generation. Also includes Unicode normalization (`Normalizer`: NFC/NFD/NFKC/NFKD), locale-aware case mapping (`CaseMapper`), character-property queries and script itemization (`CharProperties`), and locale-aware number/list/plural/date-time formatting. Behind the optional `fonts` feature, `LocaleFontSelector` adds locale-aware font family resolution via `oxifont-db`. ~2,000 SLOC across 11 source files (`tokei`). Feature-complete for all items below; 135 tests passing (`cargo nextest run -p oxitext-icu --all-features`), 36 doctests.
 
 ## Core Implementation
 - [x] Add Unicode normalization: NFC, NFD, NFKC, NFKD via `icu_normalizer` (`Normalizer`, `NormalizationForm`, `is_normalized`, `nfc` helper)

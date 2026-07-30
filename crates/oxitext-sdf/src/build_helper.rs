@@ -12,8 +12,8 @@
 //! use std::path::PathBuf;
 //!
 //! fn main() {
-//!     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-//!     let font_data = std::fs::read("assets/MyFont.ttf").unwrap();
+//!     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR set by cargo"));
+//!     let font_data = std::fs::read("assets/MyFont.ttf").expect("read font file");
 //!     let glyph_ids: Vec<u16> = (32..127).collect(); // ASCII
 //!     oxitext_sdf::generate_atlas_binary(
 //!         &font_data,

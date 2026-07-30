@@ -17,18 +17,19 @@
 //! | `parallel` | Parallel rasterization via rayon (implies `pure`) | no |
 //! | `png-output` | [`RenderResult::to_png`] — write rendered text to a PNG file | no |
 //! | `font-subset` | [`pdf_subset`] module: on-the-fly font subsetting for PDF rendering pipelines | no |
+//! | `color-bitmap-fonts` | PNG-compressed CBDT/sbix strike decoding (pulls `png` → `flate2`) | no |
 //!
 //! ### Combining features
 //!
 //! ```toml
 //! # Minimal: pipeline only
-//! oxitext = { version = "0.2.0", features = ["pure"] }
+//! oxitext = { version = "0.2.1", features = ["pure"] }
 //!
 //! # With SDF atlas for GPU rendering
-//! oxitext = { version = "0.2.0", features = ["pure", "sdf"] }
+//! oxitext = { version = "0.2.1", features = ["pure", "sdf"] }
 //!
 //! # Full: pipeline + ICU + SDF + PNG output
-//! oxitext = { version = "0.2.0", features = ["pure", "sdf", "icu", "png-output"] }
+//! oxitext = { version = "0.2.1", features = ["pure", "sdf", "icu", "png-output"] }
 //! ```
 //!
 //! ### What each feature pulls in
@@ -50,7 +51,8 @@
 //!   owns its own `FontdueRasterizer` instance (no `Mutex` contention). Implies `pure`.
 //!   No API surface change; [`Pipeline::render`] automatically parallelizes the raster phase.
 //! - **`png-output`**: Adds [`RenderResult::to_png`] for writing rendered bitmaps directly to
-//!   PNG files. Pulls in the `png` crate (~50 KB). Useful for testing and offline rendering.
+//!   PNG files. Backed by `oxitext-core`'s Pure-Rust `png_encode` module (`oxiarc-deflate` /
+//!   `oxiarc-core`), not the `png` crate. Useful for testing and offline rendering.
 //! - **`font-subset`**: Adds the [`pdf_subset`] module with [`pdf_subset::TextFontSubsetter`],
 //!   a streaming accumulator for on-the-fly font subsetting during PDF text rendering.
 //!   Pulls in `oxifont-subset` (~300 KB). Feed text via [`pdf_subset::TextFontSubsetter::feed_text`]
@@ -96,7 +98,7 @@ pub mod sdf {
 /// Enabled by the `font-subset` feature flag:
 ///
 /// ```toml
-/// oxitext = { version = "0.2.0", features = ["font-subset"] }
+/// oxitext = { version = "0.2.1", features = ["font-subset"] }
 /// ```
 ///
 /// The main entry point is [`pdf_subset::TextFontSubsetter`], which accumulates
@@ -316,19 +318,12 @@ impl RenderResult {
         bg: Rgba8,
         fg: Rgba8,
     ) -> Result<(), OxiTextError> {
+        use oxitext_core::png_encode::{encode_png, PngColorType};
+
         let canvas = self.composite_to_rgba(width, height, bg, fg);
-        let file = std::fs::File::create(path)
-            .map_err(|e| OxiTextError::Other(format!("png write: {e}")))?;
-        let w = std::io::BufWriter::new(file);
-        let mut encoder = png::Encoder::new(w, width, height);
-        encoder.set_color(png::ColorType::Rgba);
-        encoder.set_depth(png::BitDepth::Eight);
-        let mut writer = encoder
-            .write_header()
-            .map_err(|e| OxiTextError::Other(format!("png write: {e}")))?;
-        writer
-            .write_image_data(&canvas.rgba)
-            .map_err(|e| OxiTextError::Other(format!("png write: {e}")))
+        let bytes = encode_png(width, height, PngColorType::Rgba8, &canvas.rgba)
+            .map_err(|e| OxiTextError::Other(format!("png encode: {e}")))?;
+        std::fs::write(path, bytes).map_err(|e| OxiTextError::Other(format!("png write: {e}")))
     }
 }
 
@@ -509,19 +504,25 @@ fn rasterize_single(
     px_size: f32,
     rasterizer: &FontdueRasterizer,
 ) -> RenderOutput {
-    use oxitext_raster::{detect_color_glyph_type, render_colr_v0, ColorGlyphType};
+    use oxitext_raster::{detect_color_glyph_type, render_colr_cached, ColorGlyphType};
 
     // Detect whether the glyph has COLR color data.
     let color_type = detect_color_glyph_type(font_data, gid);
     match color_type {
         ColorGlyphType::ColrV0 | ColorGlyphType::ColrV1 => {
+            // `render_colr_cached` drives the full paint graph and handles both
+            // table versions; the previous `render_colr_v0` call silently
+            // discarded every gradient and composite paint, which left most
+            // COLRv1 emoji as a fully transparent bitmap.  The `_cached` form
+            // memoizes the paint graph per thread, keyed on this very
+            // `Arc<[u8]>`, so a repeated glyph costs a refcount bump.
             let dim = px_size.ceil() as u32;
             let glyph_id = ttf_parser::GlyphId(gid);
-            if let Some(cbm) = render_colr_v0(font_data, glyph_id, dim, dim) {
+            if let Some(cbm) = render_colr_cached(font_data, glyph_id, dim, dim, 0) {
                 return RenderOutput::Color(ColorBitmap {
                     width: cbm.width,
                     height: cbm.height,
-                    rgba: cbm.rgba,
+                    rgba: cbm.rgba.clone(),
                 });
             }
         }
@@ -1448,8 +1449,10 @@ impl Pipeline {
     ///
     /// - Unique `(gid, font_size_bits, font_ptr)` triples are rasterized once.
     /// - Color glyphs are detected via [`oxitext_raster::detect_color_glyph_type`]
-    ///   and rendered with [`oxitext_raster::render_colr_v0`] when the type is
-    ///   `ColrV0` or `ColrV1`.
+    ///   and rendered with [`oxitext_raster::render_colr_v1`] when the type is
+    ///   `ColrV0` or `ColrV1`; that entry point drives the full COLR paint graph
+    ///   (gradients, transforms and composite modes included) for both table
+    ///   versions.
     /// - When compiled with `--features parallel` (and not targeting WASM), the
     ///   unique-glyph set is rasterized in parallel via rayon.
     fn rasterize_glyphs(
@@ -1689,9 +1692,35 @@ impl Pipeline {
     /// that were newly packed into the atlas during this call.
     ///
     /// # Usage
-    /// ```rust,ignore
-    /// let mut atlas = oxitext_sdf::SdfAtlas::new(512, 512);
-    /// let (layout, new_ids) = pipeline.render_to_sdf_atlas("Hello", &style, &mut atlas)?;
+    ///
+    /// ```rust
+    /// use oxitext::{Pipeline, TextStyle};
+    /// use oxitext_sdf::SdfAtlas;
+    ///
+    /// // A bundled Noto Sans font keeps this example self-contained and
+    /// // deterministic (no filesystem or network access needed).
+    /// let mut pipeline =
+    ///     Pipeline::from_bytes(oxifont_bundled::NOTO_SANS_REGULAR).expect("valid bundled font");
+    /// let mut atlas = SdfAtlas::new(512, 512);
+    /// let style = TextStyle::default();
+    ///
+    /// let (layout, new_ids) = pipeline
+    ///     .render_to_sdf_atlas("Hello", &style, &mut atlas)
+    ///     .expect("render_to_sdf_atlas failed");
+    ///
+    /// assert!(!layout.glyphs.is_empty());
+    /// assert!(!new_ids.is_empty(), "first call should pack at least one new glyph");
+    /// // Every newly packed glyph must have a UV entry in the atlas.
+    /// for gid in &new_ids {
+    ///     assert!(atlas.uv_map.contains_key(gid));
+    /// }
+    ///
+    /// // A second call with the same text reuses the already-packed glyphs.
+    /// let (_layout2, new_ids2) = pipeline
+    ///     .render_to_sdf_atlas("Hello", &style, &mut atlas)
+    ///     .expect("render_to_sdf_atlas failed");
+    /// assert!(new_ids2.is_empty(), "repeated glyphs should not be re-packed");
+    ///
     /// // GPU upload: use atlas.texture + atlas.uv_map
     /// ```
     ///

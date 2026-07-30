@@ -487,6 +487,9 @@ fn unpack_bgra32(data: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
 /// Returns `None` if the data is not valid PNG or the colour type is not
 /// handled (only `Rgb` and `Rgba` are supported; indexed and greyscale modes
 /// are rare in CBDT and not decoded here).
+///
+/// Requires the `png-bitmap` feature; see the stub below for the disabled case.
+#[cfg(feature = "png-bitmap")]
 fn decode_png_to_bitmap(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
     use std::io::Cursor;
 
@@ -517,6 +520,16 @@ fn decode_png_to_bitmap(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
     };
 
     Some((width, height, rgba))
+}
+
+/// Stub used when the `png-bitmap` feature is disabled.
+///
+/// PNG-compressed CBDT/sbix strikes are then reported as undecodable, exactly
+/// as an unsupported colour type already was, and callers fall through to
+/// their outline / COLR paths. Every uncompressed strike format still decodes.
+#[cfg(not(feature = "png-bitmap"))]
+fn decode_png_to_bitmap(_data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
+    None
 }
 
 #[cfg(test)]
@@ -584,6 +597,7 @@ mod tests {
     }
 
     /// `decode_png_to_bitmap` should decode a valid 1×1 RGBA PNG.
+    #[cfg(feature = "png-bitmap")]
     #[test]
     fn decode_png_to_bitmap_decodes_minimal_png() {
         // Minimal valid 1×1 RGBA PNG (hand-crafted, no external files needed).

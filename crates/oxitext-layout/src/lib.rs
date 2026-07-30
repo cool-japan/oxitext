@@ -52,6 +52,47 @@ use std::sync::Arc;
 /// `y_advance` (falling back to `x_advance` when `y_advance` is zero), and
 /// wraps into a new column when `max_width` (treated as max column height) is
 /// exceeded.
+///
+/// This is the M1 cursor-advance layouter. For word-aware wrapping with UAX
+/// #14 line breaking, alignment, and structured per-line metrics, use
+/// [`LayoutEngine`] instead (see its [`crate::engine`] module docs).
+///
+/// # Example
+///
+/// ```rust
+/// use oxitext_core::{LayoutConstraints, ShapedGlyph, ShapedRun};
+/// use oxitext_layout::SimpleLayouter;
+/// use std::sync::Arc;
+///
+/// // A run of 5 glyphs, each advancing the cursor by 10px (a real shaper
+/// // would produce this from actual text + a font).
+/// let glyphs: Vec<ShapedGlyph> = (0u32..5)
+///     .map(|i| ShapedGlyph {
+///         gid: (i + 1) as u16,
+///         x_advance: 10.0,
+///         cluster: i,
+///         ..Default::default()
+///     })
+///     .collect();
+/// let run = ShapedRun {
+///     glyphs: glyphs.into(),
+///     font_data: Arc::from(&[][..]),
+/// };
+///
+/// let constraints = LayoutConstraints {
+///     max_width: 800.0,
+///     font_size: 16.0,
+/// };
+/// let positioned = SimpleLayouter::new()
+///     .layout(&[run], &constraints)
+///     .expect("layout is currently infallible");
+///
+/// assert_eq!(positioned.len(), 5);
+/// // Cursor advances left-to-right within the (wide) max_width.
+/// for pair in positioned.windows(2) {
+///     assert!(pair[1].pos.0 > pair[0].pos.0);
+/// }
+/// ```
 pub struct SimpleLayouter {
     /// Text flow direction for this layouter instance.
     pub flow_direction: FlowDirection,

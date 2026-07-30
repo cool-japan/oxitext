@@ -11,14 +11,14 @@ This crate is **100% Pure Rust**, `#![forbid(unsafe_code)]`, and `#![no_std]`-co
 
 ```toml
 [dependencies]
-oxitext-core = "0.2.0"
+oxitext-core = "0.2.1"
 ```
 
 For `no_std` targets, disable default features:
 
 ```toml
 [dependencies]
-oxitext-core = { version = "0.2.0", default-features = false }
+oxitext-core = { version = "0.2.1", default-features = false }
 ```
 
 ## Quick Start
@@ -121,20 +121,41 @@ The pipeline-wide error type. Implements `Display` and `core::error::Error`.
 | `InvalidFont` | Font data is corrupt or in an unsupported format |
 | `Other(String)` | Any other error not covered above |
 
+### PNG encoding (feature `png-encode`)
+
+| Item | Signature | Description |
+|------|-----------|-------------|
+| `encode_png` | `fn(width: u32, height: u32, color: PngColorType, pixels: &[u8]) -> Result<Vec<u8>, PngEncodeError>` | Encodes an 8-bit-per-channel, non-interlaced PNG with adaptive per-scanline filtering (the minimum-sum-of-absolute-differences heuristic recommended by the PNG spec) |
+| `PngColorType` | enum: `Grayscale8`, `GrayscaleAlpha8`, `Rgb8`, `Rgba8`; `channels()`, `code()` | The pixel formats the encoder accepts |
+| `PngEncodeError` | enum: `InvalidDimensions { width, height }`, `BufferSize { expected, actual }`, `ImageTooLarge { width, height }`, `Compression(String)` | Errors from `encode_png`; implements `Display` and `std::error::Error` |
+
+Off by default; enable with the `png-encode` feature (requires `std`). This module exists so downstream PNG writers — `oxitext-sdf`'s atlas dumps and `oxitext`'s `png-output` feature — don't have to depend on the `png` crate, which transitively pulls in `flate2` and `miniz_oxide`. Both are banned by this repository's `deny.toml` in favor of the pure-Rust COOLJAPAN stack: the encoder builds its `IDAT` zlib stream on `oxiarc-deflate` and its chunk checksums on `oxiarc-core`'s CRC-32.
+
+```rust
+use oxitext_core::png_encode::{encode_png, PngColorType};
+
+// A 2×2 greyscale checkerboard.
+let pixels = [0u8, 255, 255, 0];
+let png = encode_png(2, 2, PngColorType::Grayscale8, &pixels)?;
+assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+# Ok::<(), oxitext_core::png_encode::PngEncodeError>(())
+```
+
 ## Feature Flags
 
 | Feature | Default | Description |
 |---------|---------|-------------|
 | `std` | yes | Links `std`; enables `std::error::Error` for `OxiTextError`. Disable for `no_std`/`alloc` builds |
 | `serde` | no | Derives `Serialize`/`Deserialize` for the plain-data types (`ShapedGlyph`, `Bitmap`, `ColorBitmap`, `LcdBitmap`, `RenderOutput`, `TextStyle`, `ParagraphStyle`, styling enums, etc.) |
+| `png-encode` | no | Enables the `png_encode` module (see "PNG encoding" above) — a self-contained 8-bit PNG writer built on `oxiarc-deflate`/`oxiarc-core` instead of the banned `png`/`flate2`/`miniz_oxide` crates. Requires `std` |
 
 ## Cross-references
 
-- [`oxitext`](https://crates.io/crates/oxitext) — the high-level façade that ties shaping, layout, and rasterization together.
+- [`oxitext`](https://crates.io/crates/oxitext) — the high-level façade that ties shaping, layout, and rasterization together; its `png-output` feature encodes via this crate's `png_encode` module.
 - [`oxitext-shape`](https://crates.io/crates/oxitext-shape) — produces `ShapedRun`/`ShapedGlyph` from text + font bytes.
 - [`oxitext-layout`](https://crates.io/crates/oxitext-layout) — consumes `ShapedRun` and produces `PositionedGlyph`.
 - [`oxitext-raster`](https://crates.io/crates/oxitext-raster) — rasterizes glyphs into `Bitmap`/`RenderOutput`.
-- `oxitext-sdf`, `oxitext-icu`, `oxitext-bench` — signed-distance-field generation, ICU4X integration, and benchmarks.
+- `oxitext-sdf`, `oxitext-icu`, `oxitext-bench` — signed-distance-field generation (atlas dumps use this crate's `png_encode` module), ICU4X integration, and benchmarks.
 
 ## License
 

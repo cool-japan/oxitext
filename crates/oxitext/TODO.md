@@ -1,7 +1,7 @@
 # oxitext (facade) TODO
 
 ## Status
-Facade crate providing the end-to-end text rendering pipeline. Re-exports core types unconditionally, bidi/linebreak/vertical/tate-chu-yoko layout modules unconditionally, SDF module behind `sdf` feature, ICU module behind `icu` feature. `Pipeline` struct (behind `pure` feature) combines SwashShaper + SimpleLayouter + FontdueRasterizer into a single `render()` call. ~158 SLOC. Functional for basic LTR text rendering but missing rich-text support, complex layout, and production pipeline features.
+Facade crate providing the end-to-end text pipeline (shape → bidi → line-break → layout → rasterize), current as of 0.2.1 (2026-07-30). Re-exports core types and the bidi/linebreak/vertical/tate-chu-yoko layout modules unconditionally; SDF atlas generation behind `sdf`, CLDR/ICU behind `icu`, PDF font subsetting behind `font-subset`, CBDT/sbix bitmap-strike decoding behind `color-bitmap-fonts`. The `Pipeline` struct (behind the default-on `pure` feature) combines `SwashShaper` + `LayoutEngine`/`SimpleLayouter` + `FontdueRasterizer` into a single `render()` call, with bidi-aware, vertical-writing, font-fallback, and COLRv0/v1 color-glyph rendering (gradients, transforms, composite paints) all wired in. ~1,100 SLOC. Every item below is implemented; 66 tests + 7 doctests pass with `--all-features`.
 
 ## Core Implementation
 - [x] Add `Pipeline::render_to_image(text, style, bg, fg) -> ColorBitmap` producing a ready-to-use RGBA pixel buffer (canvas sized from paragraph metrics)

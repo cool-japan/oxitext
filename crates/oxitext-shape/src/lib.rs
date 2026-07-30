@@ -62,7 +62,7 @@ pub use system_fonts::{
 /// # {
 /// use oxitext_shape::native_fallback;
 ///
-/// let primary = std::fs::read("NotoSans-Regular.ttf").unwrap();
+/// let primary = std::fs::read("NotoSans-Regular.ttf").expect("read primary font file");
 /// // For Arabic/Hebrew/CJK text that NotoSans may not cover:
 /// let fallbacks = native_fallback::collect_fallback_fonts_for_text("مرحبا", &primary);
 /// println!("{} fallback font(s) provided", fallbacks.len());

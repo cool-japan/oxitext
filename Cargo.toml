@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.89"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
@@ -22,23 +22,23 @@ description = "OxiText is the COOLJAPAN Pure-Rust text pipeline: shape → bidi 
 
 [workspace.dependencies]
 # workspace internal
-oxitext-core   = { path = "crates/oxitext-core",   version = "0.2.0" }
-oxitext-shape  = { path = "crates/oxitext-shape",  version = "0.2.0" }
-oxitext-layout = { path = "crates/oxitext-layout", version = "0.2.0" }
-oxitext-raster = { path = "crates/oxitext-raster", version = "0.2.0" }
-oxitext-sdf    = { path = "crates/oxitext-sdf",    version = "0.2.0" }
-oxitext-icu    = { path = "crates/oxitext-icu",    version = "0.2.0" }
+oxitext-core   = { path = "crates/oxitext-core",   version = "0.2.1" }
+oxitext-shape  = { path = "crates/oxitext-shape",  version = "0.2.1" }
+oxitext-layout = { path = "crates/oxitext-layout", version = "0.2.1" }
+oxitext-raster = { path = "crates/oxitext-raster", version = "0.2.1" }
+oxitext-sdf    = { path = "crates/oxitext-sdf",    version = "0.2.1" }
+oxitext-icu    = { path = "crates/oxitext-icu",    version = "0.2.1" }
 # external
 swash                = { version = "0.2.9" }
 fontdue              = { version = "0.9.3" }
-unicode-segmentation = { version = "1.13.2" }
+unicode-segmentation = { version = "1.13.3" }
 unicode-bidi         = { version = "0.3.18" }
 unicode-linebreak    = { version = "0.1.5" }
 ab_glyph             = { version = "0.2.32" }
 rustybuzz            = { version = "0.20.1" }
 ttf-parser           = { version = "0.25.1" }
 icu_segmenter        = { version = "2.2.0" }
-icu_collator         = { version = "2.2.0" }
+icu_collator         = { version = "2.2.1" }
 icu_casemap          = { version = "2.2.0" }
 icu_properties       = { version = "2.2.0" }
 icu_locale_core      = { version = "2.2.0" }
@@ -49,7 +49,7 @@ icu_plurals          = { version = "2.2.0", features = ["compiled_data"] }
 fixed_decimal        = { version = "0.7" }
 serde                = { version = "1.0", features = ["derive"] }
 serde_json           = { version = "1.0" }
-wide                 = { version = "1.4.0" }
+wide                 = { version = "1.5.0" }
 lru                  = { version = "0.18.0" }
 criterion            = { version = "0.8" }
 harfbuzz-sys         = { version = "0.6.1" }
@@ -57,17 +57,22 @@ pango-sys            = { version = "0.22.0" }
 hypher               = { version = "0.1.7" }
 rayon                = { version = "1.12.0" }
 png                  = { version = "0.18" }
+# COOLJAPAN pure-Rust compression stack. Used by `oxitext-core`'s PNG encoder so
+# that writing PNG files never drags in `flate2`/`miniz_oxide` (banned by
+# `deny.toml`).
+oxiarc-core          = { version = "0.4" }
+oxiarc-deflate       = { version = "0.4" }
 bytemuck             = { version = "1.25.0" }
 resvg                = { version = "0.47.0", default-features = false }
 tiny-skia            = { version = "0.12.0" }
 icu_datetime         = { version = "2.2.0", features = ["compiled_data"] }
-smallvec             = { version = "1.15.1" }
+smallvec             = { version = "1.15.2" }
 # oxifont deps
-oxifont                = { version = "0.2.0" }
-oxifont-core           = { version = "0.2.0" }
-oxifont-parser         = { version = "0.2.0" }
-oxifont-bundled        = { version = "0.2.0", features = ["bundled-noto"] }
-oxifont-subset         = { version = "0.2.0" }
-oxifont-adapter-native = { version = "0.2.0" }
+oxifont                = { version = "0.2.1" }
+oxifont-core           = { version = "0.2.1" }
+oxifont-parser         = { version = "0.2.1" }
+oxifont-bundled        = { version = "0.2.1", features = ["bundled-noto"] }
+oxifont-subset         = { version = "0.2.1" }
+oxifont-adapter-native = { version = "0.2.1" }
 # facade crate (used in workspace-level deps so bench can reference it)
-oxitext = { path = "crates/oxitext", version = "0.2.0" }
+oxitext = { path = "crates/oxitext", version = "0.2.1" }

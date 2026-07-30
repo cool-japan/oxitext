@@ -11,7 +11,7 @@ This crate is **100% Pure Rust** and `#![forbid(unsafe_code)]`. The default shap
 
 ```toml
 [dependencies]
-oxitext-shape = "0.2.0"
+oxitext-shape = "0.2.1"
 ```
 
 With optional capabilities:
@@ -19,7 +19,7 @@ With optional capabilities:
 ```toml
 [dependencies]
 # rustybuzz alternative backend, ICU4X script itemisation, and system-font lookup
-oxitext-shape = { version = "0.2.0", features = ["rustybuzz-backend", "icu", "system-fonts"] }
+oxitext-shape = { version = "0.2.1", features = ["rustybuzz-backend", "icu", "system-fonts"] }
 ```
 
 ## Quick Start
@@ -38,7 +38,7 @@ let run = shaper.shape("Hello", Arc::clone(&font_data), 16.0)?;
 // Each glyph's x_advance is already in pixels (scaled by the 16px size).
 let total: f32 = run.glyphs.iter().map(|g| g.x_advance).sum();
 println!("{} glyphs, total advance {total}px", run.glyphs.len());
-# Ok::<(), oxitext_core::OxiTextError>(())
+# Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
 ### Feature-aware shaping with a request builder
@@ -159,7 +159,7 @@ The primary shaper. Methods that take `Arc<[u8]>` cooperate with the optional `S
 
 | Method | Description |
 |--------|-------------|
-| `SwashShaper::shape_by_script(font_data, text, px_size, features)` | Split text into per-script runs via ICU4X, then shape each with the right OpenType script tag; returns one `ShapedRun` per run (NFC-normalised) |
+| `SwashShaper::shape_by_script(font_data, text, px_size, features)` | Split text into per-script runs via ICU4X, then shape each with the right OpenType script tag; returns one `ShapedRun` per run |
 
 ## Feature Flags
 
@@ -168,6 +168,7 @@ The primary shaper. Methods that take `Arc<[u8]>` cooperate with the optional `S
 | `rustybuzz-backend` | no | Adds the `RustybuzzShaper` backend (pulls in `rustybuzz`) |
 | `icu` | no | Script-aware itemisation and NFC normalisation via `oxitext-icu` (ICU4X) |
 | `system-fonts` | no | System-font discovery via `oxifont` (the `system_fonts` module and `SwashShaper::shape_with_system_font` / `shape_with_family`) |
+| `native-fallback` | no | Native OS font fallback via `oxifont-adapter-native` (the `native_fallback` module; resolves codepoints to CoreText/DirectWrite/pure-filesystem font bytes for complex-script coverage) |
 
 ## Error variants
 

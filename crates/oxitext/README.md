@@ -12,16 +12,16 @@ The crate is a thin orchestration layer: nearly everything it exposes is **re-ex
 ```toml
 [dependencies]
 # Default: full Pure-Rust pipeline
-oxitext = "0.2.0"
+oxitext = "0.2.1"
 
 # Explicit minimal pipeline
-oxitext = { version = "0.2.0", features = ["pure"] }
+oxitext = { version = "0.2.1", features = ["pure"] }
 
 # Pipeline + SDF atlas generation for GPU rendering
-oxitext = { version = "0.2.0", features = ["pure", "sdf"] }
+oxitext = { version = "0.2.1", features = ["pure", "sdf"] }
 
 # Everything: pipeline + ICU + SDF + PNG output
-oxitext = { version = "0.2.0", features = ["pure", "sdf", "icu", "png-output"] }
+oxitext = { version = "0.2.1", features = ["pure", "sdf", "icu", "png-output"] }
 ```
 
 ## Quick Start
@@ -76,7 +76,7 @@ println!("{}×{} RGBA canvas", image.width, image.height);
 | `set_fallback_fonts(fonts)` | Set the `.notdef` fallback chain. |
 | `font_metrics()` | The font's `FontVerticalMetrics` (if available). |
 | `has_rtl(text)` | Whether the text contains RTL runs. |
-| `renders_color_glyphs(&self)` | Whether the primary font carries COLR color glyphs. |
+| `renders_color_glyphs(&self)` | Whether the primary font carries COLR color glyphs (always `true` for a `pure`-feature build). Both COLRv0 and COLRv1 — including gradients, transforms, and composite paints — are rendered correctly through the full `Pipeline`, not just flat-color fallback. |
 | `available_features()` | Static slice of compiled-in feature names. |
 | `benchmark(text, style, iterations)` / `profile(text, style)` | Rough in-process timing helpers (use Criterion for precision). |
 
@@ -93,7 +93,9 @@ Top-level helper: `best_font_for_char(ch, primary, fallbacks)` returns the index
 | `icu` | no | The `icu` module (curated re-export of [`oxitext-icu`](../oxitext-icu)) plus CLDR line-breaking/segmentation in layout. Adds ~5–15 MB of compiled CLDR data. |
 | `simd` | no | SIMD-accelerated rasterization paths in the fontdue backend. No API change. |
 | `parallel` | no | Rayon-based parallel rasterization (implies `pure`). No API change. |
-| `png-output` | no | `RenderResult::to_png` for writing rendered text to PNG. |
+| `png-output` | no | `RenderResult::to_png` for writing rendered text to PNG, via `oxitext-core`'s in-tree Pure-Rust PNG writer (no `png`/`flate2` dependency). |
+| `font-subset` | no | The [`pdf_subset`] module ([`pdf_subset::TextFontSubsetter`]) for on-the-fly font subsetting in PDF text-rendering pipelines. Pulls in `oxifont-subset`. |
+| `color-bitmap-fonts` | no | PNG-compressed CBDT/sbix color-bitmap strike decoding (implies `pure`). Off by default — pulls in `png`/`flate2`, which this workspace's `deny.toml` bans. COLRv0/v1 vector color emoji need no such dependency and already render correctly in the default build. |
 
 > **Blueprint deviation.** The original blueprint listed `default = ["pure", "emoji"]`, but the `emoji` feature depends on the planned `oxitext-emoji` crate (M3). The current default is `["pure"]` only; emoji support lands when `oxitext-emoji` does.
 
@@ -119,6 +121,8 @@ Behind `pure`: `SwashShaper`, `SimpleLayouter`, `FontdueRasterizer`, and the bac
 Behind `sdf`: the `oxitext::sdf` module (full re-export of [`oxitext-sdf`](../oxitext-sdf)).
 
 Behind `icu`: the `oxitext::icu` module re-exporting `CaseMapper`, `CharProperties`, `CollateError`, `IcuCollator`, `IcuSegmenter`, `NormalizationForm`, `Normalizer`, `ScriptRun`, `SegmentKind`, `TextScript`.
+
+Behind `font-subset`: the `oxitext::pdf_subset` module, centered on `pdf_subset::TextFontSubsetter` — accumulate codepoints/GIDs across pages via `feed_text`/`feed_char`/`feed_gid`, then call `finalize()` to produce a minimal subset font for embedding.
 
 ## Prelude
 
