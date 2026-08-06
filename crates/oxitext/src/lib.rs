@@ -23,13 +23,13 @@
 //!
 //! ```toml
 //! # Minimal: pipeline only
-//! oxitext = { version = "0.2.2", features = ["pure"] }
+//! oxitext = { version = "0.2.3", features = ["pure"] }
 //!
 //! # With SDF atlas for GPU rendering
-//! oxitext = { version = "0.2.2", features = ["pure", "sdf"] }
+//! oxitext = { version = "0.2.3", features = ["pure", "sdf"] }
 //!
 //! # Full: pipeline + ICU + SDF + PNG output
-//! oxitext = { version = "0.2.2", features = ["pure", "sdf", "icu", "png-output"] }
+//! oxitext = { version = "0.2.3", features = ["pure", "sdf", "icu", "png-output"] }
 //! ```
 //!
 //! ### What each feature pulls in
@@ -98,7 +98,7 @@ pub mod sdf {
 /// Enabled by the `font-subset` feature flag:
 ///
 /// ```toml
-/// oxitext = { version = "0.2.2", features = ["font-subset"] }
+/// oxitext = { version = "0.2.3", features = ["font-subset"] }
 /// ```
 ///
 /// The main entry point is [`pdf_subset::TextFontSubsetter`], which accumulates

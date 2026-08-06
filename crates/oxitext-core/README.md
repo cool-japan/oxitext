@@ -11,14 +11,14 @@ This crate is **100% Pure Rust**, `#![forbid(unsafe_code)]`, and `#![no_std]`-co
 
 ```toml
 [dependencies]
-oxitext-core = "0.2.2"
+oxitext-core = "0.2.3"
 ```
 
 For `no_std` targets, disable default features:
 
 ```toml
 [dependencies]
-oxitext-core = { version = "0.2.2", default-features = false }
+oxitext-core = { version = "0.2.3", default-features = false }
 ```
 
 ## Quick Start

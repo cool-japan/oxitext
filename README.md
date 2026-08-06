@@ -54,7 +54,7 @@ oxitext-bench     — criterion benchmarks (publish = false)
 
 ```toml
 [dependencies]
-oxitext = "0.2.2"  # latest stable
+oxitext = "0.2.3"  # latest stable
 ```
 
 ```rust
@@ -150,7 +150,7 @@ OxiUI/wgpu consuming the `oxitext-sdf` atlas output.
 
 ## Workspace
 
-- Version: **0.2.2** (2026-07-30)
+- Version: **0.2.3** (2026-07-30)
 - Edition: **2021**
 - MSRV: **1.89**
 - License: **Apache-2.0**

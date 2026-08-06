@@ -51,7 +51,7 @@ Inside the OxiText workspace this crate is aliased back to its upstream name, so
 consumers write ordinary `swash` code:
 
 ```toml
-swash = { package = "oxitext-swash", version = "0.2.2" }
+swash = { package = "oxitext-swash", version = "0.2.3" }
 ```
 
 ```rust

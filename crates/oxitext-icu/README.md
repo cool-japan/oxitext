@@ -13,7 +13,7 @@ This crate wraps the **ICU4X** family of crates (`icu_segmenter`, `icu_collator`
 
 ```toml
 [dependencies]
-oxitext-icu = "0.2.2"
+oxitext-icu = "0.2.3"
 ```
 
 This crate has **no default features**; every type is available as soon as the dependency is added. The optional `fonts` feature enables `LocaleFontSelector` (see the API Overview below) for locale-aware font family resolution via `oxifont-db`.
