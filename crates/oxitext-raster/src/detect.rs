@@ -119,7 +119,30 @@ pub enum ColorGlyphType {
 /// CBDT/CBLC → COLR) and returns the first match.  Returns
 /// [`ColorGlyphType::None`] when the font cannot be parsed or the glyph has
 /// no color data.
+///
+/// Bitmap strikes are probed at `u16::MAX`, i.e. "the largest strike the font
+/// offers", which answers the question *does this glyph have colour data at
+/// all*.  Callers that already know the pixel size they will render at should
+/// prefer [`detect_color_glyph_type_at`], whose probe matches exactly what
+/// [`render_cbdt_glyph`] will find at that size.
 pub fn detect_color_glyph_type(face_data: &[u8], glyph_id: u16) -> ColorGlyphType {
+    detect_color_glyph_type_at(face_data, glyph_id, u16::MAX)
+}
+
+/// Detect the color glyph format available for `glyph_id` at `ppem` pixels.
+///
+/// Identical to [`detect_color_glyph_type`] except that the `sbix` and
+/// CBDT/CBLC probes use `ppem` to select the strike, exactly as
+/// [`render_cbdt_glyph`] does.  A glyph whose strikes do not cover `ppem`
+/// therefore reports the next colour format down the priority list (or
+/// [`ColorGlyphType::None`]), so detection never promises a bitmap the
+/// renderer cannot produce.
+///
+/// # Arguments
+/// - `face_data`: raw TTF/OTF bytes.
+/// - `glyph_id`: the glyph index to inspect.
+/// - `ppem`: the pixel size the caller intends to render at.
+pub fn detect_color_glyph_type_at(face_data: &[u8], glyph_id: u16, ppem: u16) -> ColorGlyphType {
     let face = match ttf_parser::Face::parse(face_data, 0) {
         Ok(f) => f,
         Err(_) => return ColorGlyphType::None,
@@ -128,16 +151,26 @@ pub fn detect_color_glyph_type(face_data: &[u8], glyph_id: u16) -> ColorGlyphTyp
     let tables = face.tables();
 
     // sbix has highest priority per OpenType spec recommendation.
-    if tables.sbix.is_some() {
-        // glyph_raster_image will tell us if there is actually data for this glyph;
-        // we approximate by checking table presence + is_color_glyph.
-        if face.is_color_glyph(gid) {
+    //
+    // Probe the strike the way `Face::glyph_raster_image` does rather than
+    // asking `Face::is_color_glyph`: that helper only reports `COLR` coverage
+    // (ttf-parser 0.25 implements it purely over `tables().colr`), so gating
+    // the sbix/SVG/CBDT branches on it made them unreachable — a pure sbix or
+    // CBDT emoji font was always reported as `None` and silently rendered as a
+    // monochrome outline.
+    if let Some(sbix) = tables.sbix {
+        if sbix
+            .best_strike(ppem)
+            .and_then(|strike| strike.get(gid))
+            .is_some()
+        {
             return ColorGlyphType::Sbix;
         }
     }
 
-    // SVG table.
-    if tables.svg.is_some() && face.is_color_glyph(gid) {
+    // SVG table: `glyph_svg_image` looks up the per-glyph document record, so
+    // a font whose `SVG ` table covers only some glyphs is reported precisely.
+    if tables.svg.is_some() && face.glyph_svg_image(gid).is_some() {
         return ColorGlyphType::Svg;
     }
 
@@ -145,7 +178,7 @@ pub fn detect_color_glyph_type(face_data: &[u8], glyph_id: u16) -> ColorGlyphTyp
     // ttf-parser parses CBLC + CBDT together into the `cbdt` field;
     // the older `bdat`/`bloc` (Apple) or `EBDT`/`EBLC` are in `bdat`/`ebdt`.
     if (tables.cbdt.is_some() || tables.bdat.is_some() || tables.ebdt.is_some())
-        && face.is_color_glyph(gid)
+        && face.glyph_raster_image(gid, ppem).is_some()
     {
         return ColorGlyphType::EmbeddedBitmap;
     }
@@ -484,42 +517,41 @@ fn unpack_bgra32(data: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
 
 /// Decode PNG bytes into `(width, height, rgba_bytes)`.
 ///
-/// Returns `None` if the data is not valid PNG or the colour type is not
-/// handled (only `Rgb` and `Rgba` are supported; indexed and greyscale modes
-/// are rare in CBDT and not decoded here).
+/// Delegates to [`oxitext_core::png_decode::decode_png_rgba8`], the in-tree
+/// decoder built on the `oxiarc-deflate` inflater, so no `png`/`flate2`/
+/// `miniz_oxide` dependency is involved. Every still-image PNG colour type is
+/// handled — greyscale, truecolour, indexed, and both alpha forms, at bit
+/// depths 1 through 16, interlaced or not — and the output is always straight
+/// (non-premultiplied) RGBA8.
+///
+/// Returns `None` if the data is not a decodable PNG. The typed reason is
+/// available from [`decode_png_strike`]; this wrapper exists because the
+/// published [`extract_cbdt_bitmap`] / [`render_cbdt_glyph`] API returns
+/// `Option`.
 ///
 /// Requires the `png-bitmap` feature; see the stub below for the disabled case.
 #[cfg(feature = "png-bitmap")]
 fn decode_png_to_bitmap(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
-    use std::io::Cursor;
+    let image = decode_png_strike(data).ok()?;
+    Some((image.width, image.height, image.rgba))
+}
 
-    let decoder = png::Decoder::new(Cursor::new(data));
-    let mut reader = decoder.read_info().ok()?;
-    let buf_size = reader.output_buffer_size()?;
-    let mut buf = vec![0u8; buf_size];
-    let info = reader.next_frame(&mut buf).ok()?;
-
-    let width = info.width;
-    let height = info.height;
-    let buf_size = info.buffer_size();
-
-    let rgba: Vec<u8> = match info.color_type {
-        png::ColorType::Rgba => buf[..buf_size].to_vec(),
-        png::ColorType::Rgb => {
-            let capacity = width as usize * height as usize * 4;
-            let mut out = Vec::with_capacity(capacity);
-            for chunk in buf[..buf_size].chunks(3) {
-                out.extend_from_slice(chunk);
-                out.push(255u8);
-            }
-            out
-        }
-        // Indexed / greyscale / greyscale-alpha are uncommon in CBDT and
-        // would require additional conversion — skip for now.
-        _ => return None,
-    };
-
-    Some((width, height, rgba))
+/// Decode a PNG-encoded `CBDT`/`sbix` strike, preserving the failure reason.
+///
+/// This is the typed counterpart of the `Option`-returning path used inside
+/// [`extract_cbdt_bitmap`] and [`render_cbdt_glyph`]: callers that need to know
+/// *why* a colour-bitmap strike could not be decoded (corrupt CRC, unsupported
+/// header, truncated stream, …) can call it directly.
+///
+/// # Errors
+///
+/// Returns the [`oxitext_core::png_decode::PngDecodeError`] reported by the
+/// in-tree decoder.
+#[cfg(feature = "png-bitmap")]
+pub fn decode_png_strike(
+    data: &[u8],
+) -> Result<oxitext_core::png_decode::PngImage, oxitext_core::png_decode::PngDecodeError> {
+    oxitext_core::png_decode::decode_png_rgba8(data)
 }
 
 /// Stub used when the `png-bitmap` feature is disabled.
@@ -596,36 +628,55 @@ mod tests {
         assert!(decode_png_to_bitmap(b"not a png").is_none());
     }
 
-    /// `decode_png_to_bitmap` should decode a valid 1×1 RGBA PNG.
+    /// A real 1×1 RGBA8 PNG, written by an unrelated encoder, must decode to
+    /// exactly its source pixel.
     #[cfg(feature = "png-bitmap")]
     #[test]
-    fn decode_png_to_bitmap_decodes_minimal_png() {
-        // Minimal valid 1×1 RGBA PNG (hand-crafted, no external files needed).
-        // This is a well-known minimal PNG for testing decoders.
-        let minimal_rgba_png: &[u8] = &[
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
-            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR length + type
-            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, // width=1, height=1
-            0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, // bitdepth=8, RGBA, CRC
-            0x89, 0x00, 0x00, 0x00, 0x0B, 0x49, 0x44, 0x41, // IDAT length + type
-            0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00, // IDAT data
-            0x00, 0x00, 0x02, 0x00, 0x01, 0xE2, 0x21, 0xBC, // IDAT CRC
-            0x33, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, // IEND length + type
-            0x44, 0xAE, 0x42, 0x60, 0x82, // IEND data + CRC
+    fn decode_png_to_bitmap_decodes_rgba_png_exactly() {
+        // 1×1 RGBA (0x11, 0x22, 0x33, 0x44) as produced by Pillow.
+        const RGBA_1X1: [u8; 70] = [
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00,
+            0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9c, 0x63, 0x10, 0x54, 0x32, 0x76, 0x01, 0x00, 0x01, 0x59, 0x00, 0xab, 0x13, 0x2a,
+            0x25, 0xab, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
         ];
 
-        match decode_png_to_bitmap(minimal_rgba_png) {
-            Some((w, h, rgba)) => {
-                assert_eq!(w, 1, "expected width 1");
-                assert_eq!(h, 1, "expected height 1");
-                assert_eq!(rgba.len(), 4, "1x1 RGBA = 4 bytes");
-            }
-            None => {
-                // The embedded bytes above may not match a real valid PNG exactly;
-                // treat this as a best-effort smoke test — failure here just means
-                // the PNG bytes need adjustment, not that the decoder is broken.
-            }
-        }
+        let (w, h, rgba) = decode_png_to_bitmap(&RGBA_1X1).expect("valid RGBA PNG must decode");
+        assert_eq!((w, h), (1, 1));
+        assert_eq!(rgba, vec![0x11, 0x22, 0x33, 0x44]);
+    }
+
+    /// Greyscale PNG strikes used to be rejected outright (only `Rgb`/`Rgba`
+    /// were handled); they now expand to opaque RGBA.
+    #[cfg(feature = "png-bitmap")]
+    #[test]
+    fn decode_png_to_bitmap_handles_non_rgb_color_types() {
+        // 2×1 8-bit greyscale, samples 0x20 and 0xd0, as produced by Pillow.
+        const GREY_2X1: [u8; 68] = [
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x08, 0x00, 0x00, 0x00,
+            0x00, 0xd1, 0x49, 0x20, 0x56, 0x00, 0x00, 0x00, 0x0b, 0x49, 0x44, 0x41, 0x54, 0x78,
+            0x9c, 0x63, 0x50, 0xb8, 0x00, 0x00, 0x01, 0x13, 0x00, 0xf1, 0xbc, 0x6b, 0x12, 0x35,
+            0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+        ];
+
+        let (w, h, rgba) = decode_png_to_bitmap(&GREY_2X1).expect("greyscale PNG must decode");
+        assert_eq!((w, h), (2, 1));
+        assert_eq!(rgba, vec![0x20, 0x20, 0x20, 0xff, 0xd0, 0xd0, 0xd0, 0xff]);
+    }
+
+    /// The typed entry point reports *why* a strike could not be decoded
+    /// instead of collapsing every failure into `None`.
+    #[cfg(feature = "png-bitmap")]
+    #[test]
+    fn decode_png_strike_reports_typed_errors() {
+        use oxitext_core::png_decode::PngDecodeError;
+
+        assert_eq!(
+            decode_png_strike(b"not a png"),
+            Err(PngDecodeError::NotAPng)
+        );
     }
 
     // ---------------------------------------------------------------------------

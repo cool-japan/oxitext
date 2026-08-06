@@ -25,6 +25,15 @@ use smallvec::SmallVec;
 #[cfg(feature = "png-encode")]
 pub mod png_encode;
 
+/// Pure-Rust PNG reader (feature `png-decode`).
+///
+/// The mirror image of [`png_encode`]: it inflates and unfilters PNG data with
+/// `oxiarc-deflate`/`oxiarc-core`, so decoding the PNG-compressed `CBDT`/`sbix`
+/// colour-bitmap strikes of an emoji font never pulls the `flate2` +
+/// `miniz_oxide` pair banned by this repository's `deny.toml`.
+#[cfg(feature = "png-decode")]
+pub mod png_decode;
+
 /// A glyph produced by the shaper.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

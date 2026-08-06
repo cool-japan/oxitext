@@ -1,0 +1,53 @@
+[package]
+name = "oxitext-swash"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+# Apache-2.0, inherited like every other member of this workspace.
+#
+# Upstream `swash` 0.2.10 by Chad Brokaw is offered under `Apache-2.0 OR MIT`;
+# OxiText elects and redistributes it under the Apache-2.0 arm, which is exactly
+# what upstream's `OR` permits. `LICENSE-MIT` still ships beside `LICENSE-APACHE`
+# in this directory as provenance of upstream's offer -- it is not a grant
+# OxiText extends. See `NOTICE` and `PROVENANCE.md`.
+license.workspace = true
+description = "Vendored fork of swash 0.2.10 (dfrg/swash) with Indic reordering fixes, for OxiText"
+keywords = ["font", "shape", "glyph", "text"]
+categories = ["graphics", "text-processing"]
+readme = "README.md"
+
+[package.metadata.docs.rs]
+all-features = true
+default-target = "x86_64-unknown-linux-gnu"
+targets = []
+
+# Upstream's feature table, verbatim. Kept as-is so the crate stays a drop-in
+# replacement for third parties; the OxiText workspace takes the lean graph at
+# its own `[workspace.dependencies]` entry instead (see the root Cargo.toml).
+[features]
+default = ["std", "scale", "render"]
+libm = ["dep:core_maths", "skrifa/libm", "zeno?/libm"]
+render = ["scale", "zeno/eval"]
+# `scale` implies `std`: upstream inflated PNG-embedded CBDT/sbix strikes with
+# `yazi`, which is `no_std`-capable, and OxiText replaced it with the COOLJAPAN
+# `oxiarc-deflate`, which is not (it uses `std::io`/`std::sync`/`std::thread` by
+# design). A `no_std` + `scale` build is therefore no longer possible -- it has
+# no consumer in this workspace, and dropping the banned-adjacent dependency was
+# the deliberate trade. `no_std` shaping (`libm`, no `scale`) is unaffected.
+scale = ["std", "dep:oxiarc-deflate", "dep:zeno"]
+std = ["skrifa/std", "zeno?/std"]
+
+[dependencies]
+skrifa         = { workspace = true }
+core_maths     = { workspace = true, optional = true }
+zeno           = { workspace = true, optional = true }
+# Replaces upstream's `yazi` for the zlib inflate of PNG-embedded CBDT/sbix
+# strikes -- see the header of `src/scale/bitmap/png.rs`.
+oxiarc-deflate = { workspace = true, optional = true }
+
+# Upstream's lint table, verbatim.
+[lints.clippy]
+doc_markdown = "warn"
+semicolon_if_nothing_returned = "warn"

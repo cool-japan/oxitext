@@ -11,7 +11,7 @@ This crate is **100% Pure Rust** and `#![forbid(unsafe_code)]`. The default shap
 
 ```toml
 [dependencies]
-oxitext-shape = "0.2.1"
+oxitext-shape = "0.2.2"
 ```
 
 With optional capabilities:
@@ -19,7 +19,7 @@ With optional capabilities:
 ```toml
 [dependencies]
 # rustybuzz alternative backend, ICU4X script itemisation, and system-font lookup
-oxitext-shape = { version = "0.2.1", features = ["rustybuzz-backend", "icu", "system-fonts"] }
+oxitext-shape = { version = "0.2.2", features = ["rustybuzz-backend", "icu", "system-fonts"] }
 ```
 
 ## Quick Start
@@ -128,7 +128,7 @@ The primary shaper. Methods that take `Arc<[u8]>` cooperate with the optional `S
 
 | Method | Description |
 |--------|-------------|
-| `shape_with_variations(font_data, text, px_size, variations)` | Shape with `(axis_tag, value)` variation pairs (API surface; swash 0.2.x applies axes internally) |
+| `shape_with_variations(font_data, text, px_size, variations)` | Shape with `(axis_tag, value)` variation pairs; axis values are applied to the font via swash's `ShaperBuilder::variations` (a no-op for non-variable fonts) |
 
 ### Script detection — `script_detect` module
 

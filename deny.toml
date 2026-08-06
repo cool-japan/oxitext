@@ -7,4 +7,19 @@ deny = [
   { name = "flate2" },
   { name = "miniz_oxide" },
   { name = "ring" },
+  # Upstream `swash` is vendored and fixed in `crates/oxitext-swash` (see that
+  # crate's PROVENANCE.md): shipping both would put two shapers with different
+  # Indic behaviour in one graph, and the upstream one still panics on ordinary
+  # Devanagari (dfrg/swash#93, open since 2025-04-20). cargo-deny matches on the
+  # *package* name, so this cannot hit `oxitext-swash` even though that crate is
+  # dep-aliased to `swash`. If a third party ever legitimately needs upstream
+  # swash, relax this with a recorded reason.
+  { name = "swash" },
+  # `yazi` was upstream swash's zlib inflater for PNG-embedded CBDT/sbix strikes.
+  # It is pure Rust and was never a purity violation, but CLAUDE.md's
+  # dependency-replacement table and minimum-dependency rule put the COOLJAPAN
+  # `oxiarc-*` stack in its place, and `crates/oxitext-swash/src/scale/bitmap/png.rs`
+  # now inflates with `oxiarc-deflate` (the same crate `oxitext-core`'s PNG reader
+  # uses). Banned so it cannot creep back in through a future dependency.
+  { name = "yazi" },
 ]

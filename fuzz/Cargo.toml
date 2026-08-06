@@ -1,0 +1,83 @@
+[package]
+name = "oxitext-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+# `libfuzzer-sys` is a non-published, non-member dev tool (the same posture as
+# `oxitext-bench`, `publish = false` at Cargo.toml:6): it exists only to fuzz
+# the untrusted-input parsers in the main workspace and is never built as part
+# of a normal `cargo build`/`cargo test` run.
+[package.metadata]
+cargo-fuzz = true
+
+# This crate is intentionally its OWN workspace (empty table), not a member of
+# the root `oxitext` workspace, for two reasons: (1) `cargo build --workspace`
+# / `cargo nextest run --workspace` at the repo root must not need a fuzzing
+# toolchain (typically nightly) to succeed, and (2) none of the crates it
+# depends on need an `exclude = ["fuzz"]` in their own `[package]` to keep this
+# directory out of their published tarball -- it simply isn't attached to any
+# published package's manifest at all.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.oxitext-sdf]
+path = "../crates/oxitext-sdf"
+
+[dependencies.oxitext-raster]
+path = "../crates/oxitext-raster"
+# Enables the PNG-encoded CBDT/sbix decode path (`decode_png_to_bitmap`) so
+# the `cbdt_bitmap` target actually exercises PNG parsing over untrusted
+# bytes, not just the always-on raw-bitmap unpackers. The feature is
+# deny-clean -- decoding goes through `oxitext-core`'s `oxiarc`-backed
+# `png_decode`, not the banned `png`/`flate2`/`miniz_oxide` stack -- and is off
+# by default in the main workspace only so builds that never draw bitmap emoji
+# skip compiling the decoder. Turning it on here means the fuzzer covers the
+# hand-written chunk parser, unfilter loop and Adam7 pass geometry too.
+features = ["png-bitmap"]
+
+# The vendored fork of swash (`crates/oxitext-swash`), depended on by its real
+# package name rather than through the workspace's `swash` alias: this crate is
+# its own workspace and so inherits nothing. Default features (`std`, `scale`,
+# `render`) are deliberately left on -- `shape_untrusted_font` only needs the
+# shaper, but keeping the scaler compiled means a later target can reach the
+# bitmap and outline parsers, which are where most of the crate's inherited
+# `unsafe` lives.
+[dependencies.oxitext-swash]
+path = "../crates/oxitext-swash"
+
+[dependencies.oxitext-core]
+path = "../crates/oxitext-core"
+# The `png_decode` target fuzzes the PNG reader directly, rather than only
+# through the CBDT/sbix strike path in `cbdt_bitmap`.
+features = ["png-decode"]
+
+[[bin]]
+name = "sdf_atlas_from_bytes"
+path = "fuzz_targets/sdf_atlas_from_bytes.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cbdt_bitmap"
+path = "fuzz_targets/cbdt_bitmap.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "png_decode"
+path = "fuzz_targets/png_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "shape_untrusted_font"
+path = "fuzz_targets/shape_untrusted_font.rs"
+test = false
+doc = false
+bench = false

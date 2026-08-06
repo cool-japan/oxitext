@@ -83,9 +83,11 @@ pub use color::{
     ColorGlyphBitmap, ColorGlyphImage,
 };
 pub use colr_cache::{clear_colr_cache, colr_cache_stats, ColrCacheStats};
+#[cfg(feature = "png-bitmap")]
+pub use detect::decode_png_strike;
 pub use detect::{
-    detect_color_glyph_type, extract_cbdt_bitmap, extract_raster_glyph, render_cbdt_glyph,
-    ColorGlyphType, RasterImageFormat, RawRasterGlyph,
+    detect_color_glyph_type, detect_color_glyph_type_at, extract_cbdt_bitmap, extract_raster_glyph,
+    render_cbdt_glyph, ColorGlyphType, RasterImageFormat, RawRasterGlyph,
 };
 pub use gamma::{linear_to_srgb, srgb_to_linear};
 pub use options::{HintingMode, LcdFilterKernel, RasterOptions, SubpixelMode};

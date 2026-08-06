@@ -1,0 +1,30 @@
+# clippy configuration for the OxiText workspace.
+#
+# `msrv` matches `workspace.package.rust-version` in the root Cargo.toml, so
+# `cargo clippy` warns about any construct that would not compile on the
+# workspace's declared minimum-supported Rust version instead of silently
+# accepting APIs stabilized after 1.89.
+msrv = "1.89"
+
+# Identifiers `clippy::doc_markdown` must not flag. Folded here from the
+# vendored `crates/oxitext-swash`'s upstream `.clippy.toml`, which was NOT
+# vendored: a crate-local `clippy.toml` does not inherit the workspace one, so
+# keeping it would have silently dropped `msrv = "1.89"` for that crate's
+# 22.7k vendored lines -- exactly where an MSRV-raising clippy suggestion could
+# land unnoticed.
+#
+# `OxiText`/`OxiGIS`/`COOLJAPAN` are added on top: the vendored crate's manifest
+# sets `[lints.clippy] doc_markdown = "warn"`, and under the workspace's
+# `-D warnings` gate every prose mention of our own project names in a doc
+# comment would otherwise be a hard error. The trailing `".."` extends clippy's
+# default list rather than replacing it.
+doc-valid-idents = [
+    "ClearType",
+    "HarfBuzz",
+    "OpenType",
+    "PostScript",
+    "OxiText",
+    "OxiGIS",
+    "COOLJAPAN",
+    "..",
+]

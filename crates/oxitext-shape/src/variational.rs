@@ -11,20 +11,17 @@ impl SwashShaper {
     /// Shape text with specific OpenType variation axis values.
     ///
     /// `variations` is a list of `(axis_tag, value)` pairs, e.g.
-    /// `([b'w', b'g', b'h', b't'], 700.0)` for Bold weight.
+    /// `(*b"wght", 700.0)` for Bold weight.  The values are applied to the font
+    /// via swash's `ShaperBuilder::variations`, which normalises each axis value
+    /// against the font's `fvar`/`avar` tables and sets the corresponding
+    /// normalized coordinate before shaping.
     ///
-    /// # Note on swash 0.2.x API
-    ///
-    /// swash's [`ShapeContext`] does not expose a public variation-axis API in
-    /// version 0.2.x — the font metrics are applied internally.  This method
-    /// provides the correct API surface for future enhancement when swash adds
-    /// explicit variation support; for now it delegates to regular shaping and
-    /// returns the result unchanged.
+    /// For a non-variable font (no `fvar` axes), the settings are a no-op and
+    /// the default instance is shaped — matching swash's own behaviour, where
+    /// `variations` only takes effect when `coord_count != 0`.
     ///
     /// # Errors
     /// Returns [`OxiTextError::Shaping`] if the font bytes cannot be parsed.
-    ///
-    /// [`ShapeContext`]: swash::shape::ShapeContext
     pub fn shape_with_variations(
         &mut self,
         font_data: &[u8],
@@ -32,10 +29,7 @@ impl SwashShaper {
         px_size: f32,
         variations: &[([u8; 4], f32)],
     ) -> Result<ShapeResult, OxiTextError> {
-        // `variations` is accepted for future use once swash exposes a public
-        // variation-axis API; ignore the value here without a warning.
-        let _ = variations;
-        self.shape_full(font_data, text, px_size)
+        self.shape_full_with_variations(font_data, text, px_size, variations)
     }
 }
 
@@ -175,6 +169,80 @@ mod tests {
         assert!(
             result.is_ok(),
             "multiple variation axes must not error: {result:?}"
+        );
+    }
+
+    /// Loads the synthetic variable-font fixture (`variable_wght.ttf`), which has
+    /// a single `wght` axis (400 default … 900 max) and an HVAR table that maps
+    /// glyph 'A' to advance width 500 at wght=400 and 1000 at wght=900.
+    fn load_variable_font() -> Arc<[u8]> {
+        let fixture =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/variable_wght.ttf");
+        Arc::from(
+            std::fs::read(&fixture)
+                .expect("read variable_wght.ttf fixture")
+                .as_slice(),
+        )
+    }
+
+    #[test]
+    fn test_shape_with_variations_changes_advance_on_variable_font() {
+        // Regression test: shape_with_variations must actually thread its axis
+        // values into swash. swash 0.2.10 applies advance variation via the HVAR
+        // table (see swash `GlyphMetrics::advance_width` / `var::advance_delta`),
+        // so the same glyph shaped at two different `wght` values on a variable
+        // font must return two different advances. Previously this method dropped
+        // its `variations` argument (`let _ = variations;`), so both calls
+        // returned the default-instance advance.
+        let font_bytes = load_variable_font();
+        let mut shaper = SwashShaper::new();
+        // px_size == upem (1000) so 1 font unit == 1 px: advances read directly.
+        let light = shaper
+            .shape_with_variations(&font_bytes, "A", 1000.0, &[(*b"wght", 400.0)])
+            .expect("shape at wght=400");
+        let bold = shaper
+            .shape_with_variations(&font_bytes, "A", 1000.0, &[(*b"wght", 900.0)])
+            .expect("shape at wght=900");
+        assert_eq!(light.glyphs.len(), 1, "one glyph for 'A' at wght=400");
+        assert_eq!(bold.glyphs.len(), 1, "one glyph for 'A' at wght=900");
+        // Same codepoint → same glyph id; only the variation changed.
+        assert_eq!(
+            light.glyphs[0].gid, bold.glyphs[0].gid,
+            "same glyph id across weights"
+        );
+        let light_adv = light.glyphs[0].x_advance;
+        let bold_adv = bold.glyphs[0].x_advance;
+        // Fixture design: 500 @ wght=400, 1000 @ wght=900. Assert a decisive gap
+        // rather than exact values (swash may round in font-unit → px scaling).
+        assert!(
+            (light_adv - 500.0).abs() < 5.0,
+            "wght=400 advance should be ~500, got {light_adv}"
+        );
+        assert!(
+            bold_adv > light_adv + 100.0,
+            "wght=900 advance ({bold_adv}) must be substantially larger than \
+             wght=400 advance ({light_adv}) — proves the axis value reached swash"
+        );
+    }
+
+    #[test]
+    fn test_shape_with_variations_empty_matches_default_on_variable_font() {
+        // With no variation settings, shaping a variable font must yield its
+        // default-instance advance (500 for 'A'), identical to explicitly
+        // requesting the default wght=400.
+        let font_bytes = load_variable_font();
+        let mut shaper = SwashShaper::new();
+        let default_run = shaper
+            .shape_with_variations(&font_bytes, "A", 1000.0, &[])
+            .expect("shape default instance");
+        let explicit_default = shaper
+            .shape_with_variations(&font_bytes, "A", 1000.0, &[(*b"wght", 400.0)])
+            .expect("shape at wght=400");
+        assert_eq!(default_run.glyphs.len(), 1);
+        assert_eq!(explicit_default.glyphs.len(), 1);
+        assert_eq!(
+            default_run.glyphs[0].x_advance, explicit_default.glyphs[0].x_advance,
+            "empty variations must match the default instance (wght=400)"
         );
     }
 

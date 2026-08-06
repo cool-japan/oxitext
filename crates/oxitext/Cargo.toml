@@ -30,10 +30,27 @@ parallel    = ["pure", "dep:rayon"]
 png-output  = ["oxitext-core/png-encode"]
 font-subset = ["dep:oxifont-subset"]
 ## Decode PNG-compressed CBDT/sbix colour-bitmap strikes (e.g. the CBDT builds
-## of NotoColorEmoji). Off by default because it pulls `png` -> `flate2` +
-## `miniz_oxide`, which this repository's `deny.toml` bans. COLRv0/v1 vector
-## emoji need no such dependency and work in the default build.
+## of NotoColorEmoji, and every `sbix` strike -- Apple's table only stores
+## PNG).
+##
+## Deny-clean: decoding goes through `oxitext-core`'s own `png_decode` module,
+## built on the pure-Rust `oxiarc-deflate` inflater, so no `png`/`flate2`/
+## `miniz_oxide` edge is added (all three are banned by `deny.toml`). It is
+## off by default only so builds that never draw bitmap emoji do not compile
+## the decoder. COLRv0/v1 vector emoji and the uncompressed CBDT strike formats
+## (mono/gray2/gray4/gray8/BGRA32) are reached by
+## `Pipeline::render`/`render_to_image` through
+## `oxitext_raster::render_cbdt_glyph` in the default build already; this
+## feature extends that same code path to PNG-encoded strikes.
 color-bitmap-fonts = ["pure", "oxitext-raster/png-bitmap"]
+## Render OpenType `SVG ` table (SVG-in-font) colour glyphs through the
+## pipeline, via `oxitext-raster`'s `svg-backend` (`resvg` + `usvg` +
+## `tiny-skia`). Off by default: NOT deny-clean and cannot be made so
+## in-tree -- `usvg` pulls `flate2` -> `miniz_oxide` unconditionally for
+## `.svgz` support, banned by `deny.toml`. See the `svg-backend` feature doc
+## comment in `oxitext-raster`'s `Cargo.toml` for the full explanation. This
+## is a deliberate, documented trade-off for SVG color-glyph support.
+svg-glyphs  = ["pure", "oxitext-raster/svg-backend"]
 
 [dependencies]
 oxitext-core   = { workspace = true }

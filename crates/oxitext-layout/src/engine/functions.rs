@@ -2,9 +2,7 @@
 //!
 //! 🤖 Generated with [SplitRS](https://github.com/cool-japan/splitrs)
 
-use oxitext_core::{
-    DecorationRect, PositionedGlyph, ShapedGlyph, ShapedRun, TextAlignment, TextDecoration,
-};
+use oxitext_core::{DecorationRect, PositionedGlyph, ShapedGlyph, TextAlignment, TextDecoration};
 use std::sync::Arc;
 
 use super::types::{LayoutResult, Line};
@@ -295,48 +293,6 @@ pub(super) fn apply_truncation(
         .fold(0.0_f32, f32::max);
     result.metrics.total_width = new_width.max(ellipsis_x + ellipsis_adv);
     result
-}
-/// Returns the UTF-8 byte cluster offset for the `glyph_idx`-th glyph within
-/// the line (0-based within the line), by walking the shaped runs.
-///
-/// `line_glyph_start` is the absolute glyph index of the line's first glyph,
-/// used only to compute relative positions; we linearly flatten the runs and
-/// pick the `glyph_idx`-th element.
-///
-/// Returns `None` if the index is out of range.
-pub(super) fn find_cluster_for_positioned_glyph(
-    line_local_idx: usize,
-    runs: &[ShapedRun],
-    _line_glyph_start: usize,
-) -> Option<usize> {
-    let mut count = 0usize;
-    for run in runs {
-        for g in &run.glyphs {
-            if count == line_local_idx {
-                return Some(g.cluster as usize);
-            }
-            count += 1;
-        }
-    }
-    None
-}
-/// Returns the `x_advance` for the `glyph_idx`-th glyph (0-based) within the
-/// flat run list.
-pub(super) fn advance_for_glyph(
-    line_local_idx: usize,
-    runs: &[ShapedRun],
-    _line_glyph_start: usize,
-) -> f32 {
-    let mut count = 0usize;
-    for run in runs {
-        for g in &run.glyphs {
-            if count == line_local_idx {
-                return g.x_advance;
-            }
-            count += 1;
-        }
-    }
-    0.0
 }
 #[cfg(test)]
 mod tests {
@@ -732,13 +688,12 @@ mod tests {
     #[test]
     fn layout_with_options_tab_stops_resolve_correct_glyph_on_second_line() {
         // Regression test for the `layout_with_options` tab-stop handler:
-        // `find_cluster_for_positioned_glyph`/`advance_for_glyph` walk
-        // `shaped_runs` from its very first glyph (they ignore the
-        // `line_glyph_start` argument), so callers must pass the glyph's
-        // *absolute* index within `shaped_runs`/`result.glyphs`, not an
-        // index relative to the line. Passing the line-local index made
-        // every line after the first resolve the wrong source character,
-        // silently missing tab stops.
+        // the source character for each positioned glyph is now read from that
+        // glyph's own `cluster` byte offset (`result.glyphs[gi].cluster`), so
+        // second-and-later lines — whose glyphs start at a non-zero absolute
+        // index — resolve the correct source character. A prior version walked
+        // the flat shaped-run list with a line-local index and silently missed
+        // tab stops on every line after the first.
         //
         // `text` forces a mandatory break right after '\n' so line 2 starts
         // at a non-zero glyph offset, and contains two consecutive tabs so
@@ -773,6 +728,70 @@ mod tests {
         assert_eq!(
             res.glyphs[tab2_idx].pos.0, 80.0,
             "second tab on line 2 must snap forward from the first tab's stop"
+        );
+    }
+    #[test]
+    fn layout_with_options_tab_stops_recognised_in_rtl_visual_order() {
+        // Regression test: tab stops must be recognised even when `result.glyphs`
+        // are emitted in UAX#9 L2 *visual* order rather than logical order.
+        //
+        // `text` is pure Hebrew (all embedding level 1, so the line is fully
+        // reversed) with two consecutive TABs. In logical order the glyphs are
+        //   א(0) א(2) א(4) \t(6) \t(7) ב(8)
+        // but after L2 reversal the array (visual) order is
+        //   ב(8) \t(7) \t(6) א(4) א(2) א(0)
+        // so the two TAB glyphs land at visual indices 1 and 2 — indices whose
+        // *logical* characters ('א', 'א') are not tabs at all. Reading the source
+        // character from each positioned glyph's own `cluster` byte offset is the
+        // only way to see them. The two-tab cascade gives an unambiguous signal:
+        // the second TAB in visual order snaps to the first TAB's stop (80.0).
+        let text = "אאא\t\tב";
+        let run = run_from_text(text, 10.0);
+        let ts = crate::options::TabStops::with_interval(80.0);
+        let opts = crate::options::LayoutOptions::builder()
+            .tab_stops(ts)
+            .build();
+        let mut engine = LayoutEngine::new();
+        let res = engine
+            .layout_with_options(text, &[run], 10000.0, &opts, None, 16.0)
+            .expect("layout_with_options");
+        // Guard: this test only discriminates the visual-vs-logical bug if the
+        // line was actually emitted in reversed (visual) order. The first glyph
+        // must be the final Hebrew letter ב at byte offset 8, and the two TABs
+        // must land at visual indices 1 and 2 — positions whose *logical*
+        // characters are Hebrew letters, not tabs. If bidi did not reverse the
+        // line these guards fail loudly rather than letting the test pass for
+        // the wrong reason.
+        assert_eq!(
+            res.glyphs.first().map(|g| g.cluster),
+            Some(8),
+            "line must be emitted in visual (reversed) order for this test to be meaningful"
+        );
+        // Locate the two TAB glyphs by their cluster byte offset, in array
+        // (visual) order.
+        let tab_visual_indices: Vec<usize> = res
+            .glyphs
+            .iter()
+            .enumerate()
+            .filter(|(_, g)| {
+                text.get(g.cluster as usize..)
+                    .and_then(|s| s.chars().next())
+                    == Some('\t')
+            })
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(
+            tab_visual_indices,
+            vec![1, 2],
+            "both TABs must land at visual indices 1 and 2 (reversed order)"
+        );
+        // The second TAB in visual order must sit exactly at the first TAB's
+        // snapped stop (80.0). Under a logical-index lookup the tab at this
+        // visual position is misread as a Hebrew letter and never snapped.
+        let second_tab_idx = tab_visual_indices[1];
+        assert_eq!(
+            res.glyphs[second_tab_idx].pos.0, 80.0,
+            "second TAB in RTL visual order must snap forward from the first TAB's stop"
         );
     }
     #[test]

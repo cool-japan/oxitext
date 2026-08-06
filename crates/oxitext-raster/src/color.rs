@@ -337,10 +337,7 @@ fn trim_to_ink(rgba: &[u8], width: u32, height: u32) -> Option<(Vec<u8>, u32, u3
     for y in y0..=y1 {
         let start = ((y as usize) * (width as usize) + x0 as usize) * 4;
         let end = start + (w as usize) * 4;
-        match rgba.get(start..end) {
-            Some(row) => out.extend_from_slice(row),
-            None => return None,
-        }
+        out.extend_from_slice(rgba.get(start..end)?);
     }
     Some((out, x0, y0, w, h))
 }

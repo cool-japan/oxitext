@@ -298,6 +298,10 @@ struct ShapeParams<'a> {
     script_tag: Option<[u8; 4]>,
     language_tag: Option<[u8; 4]>,
     features: &'a [ShapeFeature],
+    /// OpenType variation-axis settings as `(axis_tag, value)` pairs, e.g.
+    /// `(*b"wght", 700.0)`. Applied to variable fonts via swash's
+    /// `ShaperBuilder::variations`; ignored (no-op) for non-variable fonts.
+    variations: &'a [([u8; 4], f32)],
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -531,6 +535,7 @@ impl SwashShaper {
             script_tag: req.script,
             language_tag: req.language,
             features: &features,
+            variations: &[],
         })
     }
 
@@ -558,6 +563,7 @@ impl SwashShaper {
             script_tag: None,
             language_tag: None,
             features,
+            variations: &[],
         })
     }
 
@@ -612,6 +618,7 @@ impl SwashShaper {
             .script(script)
             .language(language)
             .features(swash_features.iter())
+            .variations(params.variations.iter())
             .build();
 
         shaper.add_str(params.text);
@@ -710,6 +717,24 @@ impl SwashShaper {
         text: &str,
         px_size: f32,
     ) -> Result<ShapeResult, OxiTextError> {
+        self.shape_full_with_variations(font_data, text, px_size, &[])
+    }
+
+    /// Shared LTR [`ShapeResult`] path used by [`Self::shape_full`] and
+    /// [`Self::shape_with_variations`].
+    ///
+    /// `variations` supplies OpenType variation-axis `(tag, value)` pairs; pass
+    /// an empty slice for the default (non-variable) instance.
+    ///
+    /// # Errors
+    /// Returns [`OxiTextError::Shaping`] if the font bytes cannot be parsed.
+    pub(crate) fn shape_full_with_variations(
+        &mut self,
+        font_data: &[u8],
+        text: &str,
+        px_size: f32,
+        variations: &[([u8; 4], f32)],
+    ) -> Result<ShapeResult, OxiTextError> {
         use unicode_segmentation::UnicodeSegmentation;
 
         let glyphs = self.shape_with_features_internal(ShapeParams {
@@ -720,6 +745,7 @@ impl SwashShaper {
             script_tag: None,
             language_tag: None,
             features: &[],
+            variations,
         })?;
         let mut result = ShapeResult::from_glyphs(glyphs, text, ShapeDirection::Ltr);
         // Populate grapheme cluster boundaries: start offset of each grapheme
@@ -754,6 +780,7 @@ impl SwashShaper {
             script_tag: None,
             language_tag: None,
             features: &[],
+            variations: &[],
         })
     }
 
@@ -778,6 +805,7 @@ impl SwashShaper {
             script_tag: None,
             language_tag: None,
             features: &[],
+            variations: &[],
         })
     }
 
@@ -819,6 +847,7 @@ impl SwashShaper {
             script_tag: None,
             language_tag: None,
             features: &[],
+            variations: &[],
         })?;
 
         if fonts.len() <= 1 {
@@ -845,6 +874,7 @@ impl SwashShaper {
                     script_tag: None,
                     language_tag: None,
                     features: &[],
+                    variations: &[],
                 }) {
                     Ok(g) => g,
                     Err(_) => continue,
@@ -938,6 +968,7 @@ impl SwashShaper {
             script_tag: None,
             language_tag: None,
             features: &[],
+            variations: &[],
         })?;
         let mut result = ShapeResult::from_glyphs(glyphs, text, ShapeDirection::Ltr);
         result.cluster_boundaries = text
@@ -1184,6 +1215,7 @@ impl SwashShaper {
                 script_tag: Some(ot_tag),
                 language_tag: None,
                 features,
+                variations: &[],
             })?;
 
             // Adjust cluster offsets from sub-run-relative to text-absolute.

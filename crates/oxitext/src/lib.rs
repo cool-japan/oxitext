@@ -23,13 +23,13 @@
 //!
 //! ```toml
 //! # Minimal: pipeline only
-//! oxitext = { version = "0.2.1", features = ["pure"] }
+//! oxitext = { version = "0.2.2", features = ["pure"] }
 //!
 //! # With SDF atlas for GPU rendering
-//! oxitext = { version = "0.2.1", features = ["pure", "sdf"] }
+//! oxitext = { version = "0.2.2", features = ["pure", "sdf"] }
 //!
 //! # Full: pipeline + ICU + SDF + PNG output
-//! oxitext = { version = "0.2.1", features = ["pure", "sdf", "icu", "png-output"] }
+//! oxitext = { version = "0.2.2", features = ["pure", "sdf", "icu", "png-output"] }
 //! ```
 //!
 //! ### What each feature pulls in
@@ -98,7 +98,7 @@ pub mod sdf {
 /// Enabled by the `font-subset` feature flag:
 ///
 /// ```toml
-/// oxitext = { version = "0.2.1", features = ["font-subset"] }
+/// oxitext = { version = "0.2.2", features = ["font-subset"] }
 /// ```
 ///
 /// The main entry point is [`pdf_subset::TextFontSubsetter`], which accumulates
@@ -489,10 +489,15 @@ pub fn best_font_for_char(ch: char, primary: &[u8], fallbacks: &[Vec<u8>]) -> us
     0
 }
 
-/// Rasterize a single glyph, trying COLRv0/v1 first then greyscale fallback.
+/// Rasterize a single glyph, trying its detected color-glyph format (COLRv0,
+/// COLRv1, CBDT/CBLC, `sbix`, or -- with the `svg-glyphs` feature -- `SVG `)
+/// first, then falling back to greyscale.
 ///
 /// Returns a [`RenderOutput`] that is [`RenderOutput::Color`] for color glyphs
-/// and [`RenderOutput::Greyscale`] for all others.
+/// successfully decoded and [`RenderOutput::Greyscale`] for all others,
+/// including color formats this build cannot decode (e.g. a PNG-encoded CBDT
+/// strike without the `color-bitmap-fonts` feature, or an `SVG ` glyph
+/// without `svg-glyphs`).
 ///
 /// `rasterizer` is the caller's [`FontdueRasterizer`] so its parse cache is
 /// reused across glyphs.  The parallel path creates a fresh rasterizer per
@@ -504,10 +509,15 @@ fn rasterize_single(
     px_size: f32,
     rasterizer: &FontdueRasterizer,
 ) -> RenderOutput {
-    use oxitext_raster::{detect_color_glyph_type, render_colr_cached, ColorGlyphType};
+    use oxitext_raster::{detect_color_glyph_type_at, render_colr_cached, ColorGlyphType};
 
-    // Detect whether the glyph has COLR color data.
-    let color_type = detect_color_glyph_type(font_data, gid);
+    // Which colour-glyph format this glyph has *at the size we are about to
+    // render*: bitmap strikes are per-ppem, so probing at `px_size` keeps
+    // detection and rendering in agreement (a strike that does not cover this
+    // size falls through to the next format instead of promising a bitmap
+    // `render_cbdt_glyph` cannot produce).
+    let probe_ppem = (px_size.ceil() as u32).clamp(1, u16::MAX as u32) as u16;
+    let color_type = detect_color_glyph_type_at(font_data, gid, probe_ppem);
     match color_type {
         ColorGlyphType::ColrV0 | ColorGlyphType::ColrV1 => {
             // `render_colr_cached` drives the full paint graph and handles both
@@ -524,6 +534,43 @@ fn rasterize_single(
                     height: cbm.height,
                     rgba: cbm.rgba.clone(),
                 });
+            }
+        }
+        ColorGlyphType::EmbeddedBitmap | ColorGlyphType::Sbix => {
+            // CBDT/CBLC and Apple `sbix` both surface their strikes through
+            // ttf-parser's uniform `glyph_raster_image` API, so one call
+            // (`render_cbdt_glyph`) covers both -- and it is always reachable
+            // here, with no extra facade feature, because `oxitext-raster`'s
+            // `detect` module is unconditional. Uncompressed CBDT strike
+            // formats (mono/gray2/gray4/gray8/BGRA32) decode unconditionally;
+            // PNG-encoded strikes -- the common case for real colour emoji
+            // fonts (e.g. NotoColorEmoji's CBDT build) and the *only* format
+            // `sbix` uses -- additionally require the `color-bitmap-fonts`
+            // feature. That feature is deny-clean (the decoder is
+            // `oxitext-core`'s `oxiarc`-backed `png_decode`, not the banned
+            // `png`/`flate2` stack); it is merely off by default, and without
+            // it a PNG strike returns `None` and falls through to the
+            // greyscale path below exactly as an unsupported colour format
+            // already did.
+            let px_size_u16 = probe_ppem;
+            if let Some(cgb) = oxitext_raster::render_cbdt_glyph(font_data, gid, px_size_u16) {
+                return RenderOutput::Color(ColorBitmap {
+                    width: cgb.width,
+                    height: cgb.height,
+                    rgba: cgb.rgba,
+                });
+            }
+        }
+        #[cfg(feature = "svg-glyphs")]
+        ColorGlyphType::Svg => {
+            // Requires the `svg-glyphs` feature (off by default: `resvg`'s
+            // `usvg` dependency pulls `flate2` -> `miniz_oxide`
+            // unconditionally for `.svgz` support, banned by `deny.toml`; see
+            // `oxitext-raster`'s Cargo.toml `svg-backend` doc comment). When
+            // the feature is off, `Svg` falls through to the `_` arm below
+            // exactly like an unsupported colour format.
+            if let Some(bmp) = oxitext_raster::render_svg_glyph(font_data, gid, probe_ppem) {
+                return RenderOutput::Color(bmp);
             }
         }
         _ => {}

@@ -169,13 +169,22 @@ impl FontdueRaster {
     /// different offsets produce bitmaps with subtly different coverage near
     /// the glyph edges.
     ///
-    /// # Note on fontdue
-    /// fontdue does not expose a subpixel-positioned rasterization API; it
-    /// always places the glyph at integer coordinates.  The fractional offsets
-    /// are accepted and recorded (e.g. for cache-key purposes) but currently
-    /// do not alter the rendered bitmap.  When a backend with genuine subpixel
-    /// support (e.g. ab_glyph via `rasterize_with_offset`) is used, callers
-    /// should prefer that backend for fractional positioning.
+    /// # Implementation
+    /// fontdue itself does not expose a subpixel-positioned rasterization
+    /// API — it always places the glyph at integer coordinates. This method
+    /// therefore renders through [`crate::subpixel::rasterize_positioned_bitmap`]
+    /// (`ab_glyph`, which accepts a fractional pen position and re-samples the
+    /// outline at that exact offset) instead, and only falls back to the
+    /// grid-fitted fontdue path — with the offsets having no effect, as
+    /// before — when `ab_glyph` cannot parse `face_data` or the glyph has no
+    /// outline. `ab_glyph` is an unconditional dependency of this crate, so
+    /// this fallback is the only case where fractional positioning is lost.
+    ///
+    /// Note that the returned bitmap's `width`/`height` come from `ab_glyph`'s
+    /// own outline bounds when that path succeeds, which need not exactly
+    /// match the dimensions [`Self::rasterize`] (fontdue) would report for the
+    /// same glyph at offset `(0.0, 0.0)` — both are valid anti-aliased
+    /// rasterizations of the same outline, not byte-identical bitmaps.
     pub fn raster_positioned(
         &self,
         face_data: &[u8],
@@ -184,8 +193,16 @@ impl FontdueRaster {
         subpixel_x: f32,
         subpixel_y: f32,
     ) -> Option<oxitext_core::Bitmap> {
-        // Fractional offsets are noted but not applied by fontdue.
-        let _ = (subpixel_x, subpixel_y);
+        if let Some(bitmap) = crate::subpixel::rasterize_positioned_bitmap(
+            face_data, glyph_id, px_size, subpixel_x, subpixel_y,
+        ) {
+            return Some(bitmap);
+        }
+
+        // Fallback: face_data didn't parse under ab_glyph, or the glyph has no
+        // outline there either. Render through the grid-fitted fontdue path so
+        // callers still get a usable bitmap; the offsets have no effect here,
+        // matching this method's pre-subpixel-support behaviour.
         let out = self.rasterize(face_data, glyph_id, px_size);
         if out.width == 0 && out.height == 0 {
             // Whitespace or unparseable font — return empty bitmap rather than None

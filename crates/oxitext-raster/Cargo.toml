@@ -15,17 +15,32 @@ categories = ["graphics", "rendering"]
 ab-glyph-backend = []
 simd             = ["dep:wide"]
 swash-backend    = ["dep:swash"]
+## Render OpenType `SVG ` table glyphs via `resvg`/`usvg` + `tiny-skia`.
+##
+## NOT deny-clean, and cannot be made so in-tree: `usvg` (a `resvg` dependency)
+## declares an unconditional, non-optional `flate2` dependency for `.svgz`
+## support, and `resvg` itself requests `tiny-skia`'s default features (so
+## Cargo's feature unification re-enables `tiny-skia`'s `png-format` -- and
+## with it `png` -> `flate2` -- the moment this feature is active, regardless
+## of this crate's own `tiny-skia` feature selection; see the workspace
+## `tiny-skia` dependency comment in the root `Cargo.toml`). Both `flate2` and
+## its `miniz_oxide` dependency are banned by this repository's `deny.toml`.
+## Off by default so the default build stays deny-clean; enabling it is a
+## deliberate, documented trade-off for SVG color-glyph support.
 svg-backend      = ["dep:resvg", "dep:tiny-skia"]
 oxifont-backend  = ["dep:oxifont-parser", "dep:oxifont-core", "dep:tiny-skia"]
 ## Decode PNG-compressed CBDT/CBLC and sbix strikes (color-bitmap emoji fonts
-## such as the Apple/Google `NotoColorEmoji` CBDT builds).
+## such as the Apple/Google `NotoColorEmoji` CBDT builds, and every `sbix`
+## strike -- Apple's table only stores PNG).
 ##
-## Off by default: the `png` crate pulls `flate2` + `miniz_oxide`, both of which
-## this repository's own `deny.toml` bans in favour of the `oxiarc-*` stack. All
-## other raster paths -- outlines, COLRv0/v1, and the uncompressed CBDT
-## mono/gray2/gray4/gray8/BGRA32 strike formats -- are unaffected and stay
-## available without this feature.
-png-bitmap       = ["dep:png"]
+## Deny-clean: the decoder is `oxitext-core`'s own `png_decode` module, built on
+## the pure-Rust `oxiarc-deflate`/`oxiarc-core` stack, so this feature adds no
+## `png`/`flate2`/`miniz_oxide` edge (all three are banned by this repository's
+## `deny.toml`). It stays off by default purely so the default build does not
+## compile a decoder it never calls; all other raster paths -- outlines,
+## COLRv0/v1, and the uncompressed CBDT mono/gray2/gray4/gray8/BGRA32 strike
+## formats -- work without it.
+png-bitmap       = ["oxitext-core/png-decode"]
 
 [dependencies]
 oxitext-core    = { workspace = true }
@@ -33,9 +48,8 @@ fontdue         = { workspace = true }
 ttf-parser      = { workspace = true }
 ab_glyph        = { workspace = true }
 lru             = { workspace = true }
-png             = { workspace = true, optional = true }
 wide            = { workspace = true, optional = true }
-swash           = { workspace = true, optional = true }
+swash           = { workspace = true, optional = true, features = ["scale", "render"] }
 resvg           = { workspace = true, optional = true }
 tiny-skia       = { workspace = true, optional = true }
 oxifont-parser  = { workspace = true, optional = true }

@@ -12,8 +12,8 @@ use rayon::prelude::*;
 use std::sync::Arc;
 
 use super::functions::{
-    advance_for_glyph, apply_hanging_punctuation, apply_truncation, build_ranges_from_kp_breaks,
-    compute_alignment, count_internal_ws_gaps, find_cluster_for_positioned_glyph,
+    apply_hanging_punctuation, apply_truncation, build_ranges_from_kp_breaks, compute_alignment,
+    count_internal_ws_gaps,
 };
 
 /// Controls which line-breaking algorithm the layout engine uses.
@@ -1195,29 +1195,33 @@ impl LayoutEngine {
                 }
                 let mut pen = result.glyphs[gs].pos.0;
                 for gi in gs..ge {
-                    let cluster = result.glyphs[gi].pos;
-                    let char_at_cluster: Option<char> = {
-                        // `find_cluster_for_positioned_glyph` walks `shaped_runs`
-                        // from its very first glyph, ignoring `line_glyph_start`,
-                        // so it must be given the glyph's absolute index within
-                        // the flattened run list (which matches `result.glyphs`
-                        // index order), not an index relative to the line.
-                        let cluster_off =
-                            find_cluster_for_positioned_glyph(gi, shaped_runs, line.glyph_start);
-                        cluster_off
-                            .and_then(|off| source_text.get(off..))
-                            .and_then(|s| s.chars().next())
-                    };
+                    let glyph_pos = result.glyphs[gi].pos;
+                    // Resolve the source character straight from the positioned
+                    // glyph's own `cluster` byte offset. This is correct for
+                    // both LTR and bidi/RTL text: `result.glyphs` may be emitted
+                    // in UAX#9 L2 *visual* order (see `layout_impl`), so the flat
+                    // shaped-run walk that the old `find_cluster_for_positioned_glyph`
+                    // performed — which is in *logical* order — read an unrelated
+                    // character for any line mixing RTL runs with a TAB. The
+                    // per-glyph `cluster` field is populated from the same source
+                    // glyph regardless of visual reordering, so it is authoritative.
+                    let cluster_off = result.glyphs[gi].cluster as usize;
+                    let char_at_cluster: Option<char> = source_text
+                        .get(cluster_off..)
+                        .and_then(|s| s.chars().next());
                     if char_at_cluster == Some('\t') {
                         let snap = tab_stops.next_stop(pen);
-                        result.glyphs[gi].pos = (pen, cluster.1);
+                        result.glyphs[gi].pos = (pen, glyph_pos.1);
                         pen = snap;
                     } else {
                         let next_x = if gi + 1 < ge {
                             result.glyphs[gi + 1].pos.0
                         } else {
-                            let adv = advance_for_glyph(gi, shaped_runs, line.glyph_start);
-                            cluster.0 + adv
+                            // Use the positioned glyph's own advance, which — unlike
+                            // the raw shaped advance the old `advance_for_glyph`
+                            // returned — already folds in the justification extra
+                            // added during line building.
+                            glyph_pos.0 + result.glyphs[gi].advance_x
                         };
                         pen = next_x;
                     }
