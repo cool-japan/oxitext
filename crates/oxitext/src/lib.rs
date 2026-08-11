@@ -113,6 +113,13 @@ pub mod pdf_subset;
 pub use oxitext_raster::RasterBackend;
 #[cfg(feature = "pure")]
 pub use oxitext_shape::{ShapeBackend, ShapeDirection, ShapeFeature, ShapeRequest};
+// `Script`/`Tag`/`tag_from_bytes` let a caller check whether the shaper
+// accepts a script tag BEFORE shaping with it — `Script::from_opentype(tag)`
+// round-tripped through `Script::to_opentype()`. Callers that need this were
+// otherwise forced to take a direct dependency on the shaper crate, which is
+// exactly what these re-exports exist to avoid.
+#[cfg(feature = "pure")]
+pub use oxitext_shape::{tag_from_bytes, Script, Tag};
 
 // M2: bidi, line-break, and vertical orientation are always available (no feature gate).
 pub use oxitext_layout::bidi::{BidiParagraph, BidiRun};
@@ -1032,21 +1039,48 @@ impl Pipeline {
         para.is_rtl() || para.runs().iter().any(|r| r.level % 2 == 1)
     }
 
-    /// Shapes `text_slice` with fallback support, returning a `ShapedRun` whose
-    /// glyphs use the primary font except where GID is 0 (`.notdef`), in which
-    /// case each contiguous notdef cluster is re-shaped through the fallback
-    /// chain in order.
+    /// Shapes `text_slice` with fallback support, returning **one
+    /// [`ShapedRun`] per font actually used**, in logical order: glyphs come
+    /// from the primary except where the primary produced `.notdef`, in which
+    /// case that whole cluster is re-shaped through the fallback chain in
+    /// order and the winning fallback's glyph sequence replaces it.
     ///
     /// The `rtl` flag controls shaping direction; `cluster_offset` is added to
-    /// every glyph's `cluster` field so the returned run refers to byte positions
-    /// in the full source string rather than in the sub-slice.
+    /// every glyph's `cluster` field so the returned runs refer to byte
+    /// positions in the full source string rather than in the sub-slice.
+    ///
+    /// # Why this returns a `Vec`
+    ///
+    /// A [`ShapedRun`] carries ONE `font_data` for all of its glyphs. Until
+    /// 0.2.3 this function shaped into a single run and, on a fallback hit,
+    /// overwrote that run-level `font_data` with the fallback's — which
+    /// silently re-pointed every OTHER glyph in the run too. The glyphs the
+    /// primary had resolved kept the primary's glyph ids but were now
+    /// attributed to the fallback face, so a caller rasterising per
+    /// `(font_data, gid)` drew the primary's ids out of the fallback's
+    /// `glyf`/`CFF ` table.
+    ///
+    /// That is not a metrics wobble, it is wrong letters, and it is invisible
+    /// whenever the two faces happen to number their glyphs alike — as Noto
+    /// Sans, Meiryo, MS Gothic, MS Mincho and Yu Gothic all do for basic Latin.
+    /// Splitting into per-font runs is the only representation the existing
+    /// `ShapedRun` type can express correctly, and every caller already handles
+    /// `&[ShapedRun]` because the bidi path has always produced several.
+    ///
+    /// The same rewrite fixes a second defect: the old code took only the FIRST
+    /// non-notdef glyph the fallback produced for a cluster
+    /// (`fb_glyphs.into_iter().find(..)`) and wrote it over a single glyph
+    /// slot. A fallback that shaped the cluster into a base plus a mark lost
+    /// the mark, and a cluster the primary had turned into several notdefs got
+    /// that one glyph repeated. Whole-cluster replacement is what a fallback
+    /// actually means.
     fn shape_run_with_notdef_fallback(
         &mut self,
         text_slice: &str,
         px_size: f32,
         rtl: bool,
         cluster_offset: u32,
-    ) -> Result<ShapedRun, OxiTextError> {
+    ) -> Result<Vec<ShapedRun>, OxiTextError> {
         // Shape with primary font.
         let mut run = match &mut self.shaper {
             ShaperKind::Default(s) => s.shape_with_direction(
@@ -1070,81 +1104,146 @@ impl Pipeline {
         }
 
         // Early-exit when there are no fallback fonts or no notdef glyphs.
+        // This is the overwhelmingly common case and must stay byte-identical
+        // to the pre-0.2.3 behaviour: one run, the primary's font_data.
         if self.fallback_fonts.is_empty() || run.glyphs.iter().all(|g| g.gid != 0) {
-            return Ok(run);
+            return Ok(vec![run]);
         }
 
-        // For each glyph with gid == 0, try fallback fonts in order.
-        // We operate on the glyph array by index to avoid overlapping borrows.
-        let cluster_offset_u32 = cluster_offset;
+        // Cluster boundaries, as byte offsets into `text_slice`. Derived by
+        // sorting the distinct cluster values rather than by scanning forward
+        // for "the next different cluster": under RTL shaping the glyph array
+        // runs in decreasing cluster order, so a forward scan finds a SMALLER
+        // offset and yields an empty or inverted range. Sorting is direction
+        // agnostic.
+        let mut boundaries: Vec<usize> = run
+            .glyphs
+            .iter()
+            .map(|g| g.cluster.saturating_sub(cluster_offset) as usize)
+            .collect();
+        boundaries.sort_unstable();
+        boundaries.dedup();
+        let cluster_end_of = |start: usize| -> usize {
+            boundaries
+                .iter()
+                .copied()
+                .find(|b| *b > start)
+                .unwrap_or(text_slice.len())
+                .min(text_slice.len())
+        };
+
         let fallbacks: Vec<std::sync::Arc<[u8]>> = self.fallback_fonts.clone();
-        let n = run.glyphs.len();
+        // Glyphs paired with the font they must be drawn from: `None` = the
+        // primary. Built in one pass over the primary's clusters, then split
+        // into per-font runs below.
+        let mut resolved: Vec<(ShapedGlyph, Option<std::sync::Arc<[u8]>>)> =
+            Vec::with_capacity(run.glyphs.len());
 
         let mut idx = 0;
-        while idx < n {
-            if run.glyphs[idx].gid != 0 {
-                idx += 1;
-                continue;
+        while idx < run.glyphs.len() {
+            let cluster = run.glyphs[idx].cluster;
+            // The whole span of glyphs the primary produced for this cluster.
+            let mut span_end = idx + 1;
+            while span_end < run.glyphs.len() && run.glyphs[span_end].cluster == cluster {
+                span_end += 1;
             }
-            let notdef_cluster = run.glyphs[idx].cluster;
-            // Determine the byte range of this cluster in text_slice.
-            let cluster_start = (notdef_cluster.saturating_sub(cluster_offset_u32)) as usize;
-            // Next cluster boundary: scan forward for a glyph with a different cluster.
-            let next_cluster = run
-                .glyphs
-                .iter()
-                .skip(idx + 1)
-                .find(|g2| g2.cluster != notdef_cluster)
-                .map(|g2| (g2.cluster.saturating_sub(cluster_offset_u32)) as usize);
-            let cluster_end = next_cluster
-                .unwrap_or(text_slice.len())
-                .min(text_slice.len());
-            if cluster_start >= cluster_end {
-                idx += 1;
-                continue;
-            }
-            let slice = match text_slice.get(cluster_start..cluster_end) {
-                Some(s) if !s.is_empty() => s,
-                _ => {
-                    idx += 1;
-                    continue;
-                }
-            };
+            let span_has_notdef = run.glyphs[idx..span_end].iter().any(|g| g.gid == 0);
 
-            // Try each fallback font.
-            'fallback_loop: for fb_data in &fallbacks {
-                let fb_glyphs: Vec<ShapedGlyph> = match &mut self.shaper {
-                    ShaperKind::Default(s) => {
-                        match s.shape_with_direction(
-                            slice,
-                            std::sync::Arc::clone(fb_data),
-                            px_size,
-                            rtl,
-                        ) {
-                            Ok(r) => r.glyphs.into_vec(),
-                            Err(_) => continue,
+            let mut replacement: Option<(Vec<ShapedGlyph>, std::sync::Arc<[u8]>)> = None;
+            if span_has_notdef {
+                let start = cluster.saturating_sub(cluster_offset) as usize;
+                let end = cluster_end_of(start);
+                let slice = if start < end {
+                    text_slice.get(start..end).filter(|s| !s.is_empty())
+                } else {
+                    None
+                };
+                if let Some(slice) = slice {
+                    for fb_data in &fallbacks {
+                        let fb_glyphs: Vec<ShapedGlyph> = match &mut self.shaper {
+                            ShaperKind::Default(s) => {
+                                match s.shape_with_direction(
+                                    slice,
+                                    std::sync::Arc::clone(fb_data),
+                                    px_size,
+                                    rtl,
+                                ) {
+                                    Ok(r) => r.glyphs.into_vec(),
+                                    Err(_) => continue,
+                                }
+                            }
+                            ShaperKind::Custom(s) => {
+                                s.shape_with_direction(fb_data, slice, px_size, rtl)
+                            }
+                        };
+                        // Same acceptance rule as before — the first fallback
+                        // that draws anything at all wins — but now its ENTIRE
+                        // glyph sequence is taken, not just the first glyph.
+                        if fb_glyphs.iter().any(|g| g.gid != 0) {
+                            replacement = Some((fb_glyphs, std::sync::Arc::clone(fb_data)));
+                            break;
                         }
                     }
-                    ShaperKind::Custom(s) => s.shape_with_direction(fb_data, slice, px_size, rtl),
-                };
-                if let Some(winner) = fb_glyphs.into_iter().find(|g| g.gid != 0) {
-                    run.glyphs[idx].gid = winner.gid;
-                    run.glyphs[idx].x_advance = winner.x_advance;
-                    run.glyphs[idx].y_advance = winner.y_advance;
-                    run.glyphs[idx].x_offset = winner.x_offset;
-                    run.glyphs[idx].y_offset = winner.y_offset;
-                    // Update the run-level font_data Arc so the rasterizer uses
-                    // the fallback font for this glyph.  Note: ShapedRun holds one
-                    // font_data for the whole run; callers needing per-glyph font
-                    // selection should use `render_styled` with separate TextRuns.
-                    run.font_data = std::sync::Arc::clone(fb_data);
-                    break 'fallback_loop;
                 }
             }
-            idx += 1;
+
+            match replacement {
+                Some((fb_glyphs, fb_data)) => {
+                    for mut g in fb_glyphs {
+                        // The fallback shaped a bare slice, so its clusters are
+                        // relative to that slice; restore full-text positions.
+                        g.cluster = cluster;
+                        resolved.push((g, Some(std::sync::Arc::clone(&fb_data))));
+                    }
+                }
+                None => {
+                    for g in &run.glyphs[idx..span_end] {
+                        resolved.push((g.clone(), None));
+                    }
+                }
+            }
+            idx = span_end;
         }
 
-        Ok(run)
+        // Split into maximal consecutive same-font spans, one run each. Fonts
+        // are compared by Arc pointer: the caller handed these in and clones
+        // share an allocation, so pointer identity is exactly "the same font"
+        // without hashing megabytes of font bytes.
+        let primary = std::sync::Arc::clone(&self.font_data);
+        let same_font =
+            |a: &Option<std::sync::Arc<[u8]>>, b: &Option<std::sync::Arc<[u8]>>| match (a, b) {
+                (None, None) => true,
+                (Some(x), Some(y)) => std::sync::Arc::ptr_eq(x, y),
+                _ => false,
+            };
+        let mut runs: Vec<ShapedRun> = Vec::new();
+        let mut start = 0;
+        while start < resolved.len() {
+            let mut end = start + 1;
+            while end < resolved.len() && same_font(&resolved[end].1, &resolved[start].1) {
+                end += 1;
+            }
+            let font_data = match &resolved[start].1 {
+                Some(fb) => std::sync::Arc::clone(fb),
+                None => std::sync::Arc::clone(&primary),
+            };
+            runs.push(ShapedRun {
+                glyphs: resolved[start..end]
+                    .iter()
+                    .map(|(g, _)| g.clone())
+                    .collect::<Vec<_>>()
+                    .into(),
+                font_data,
+            });
+            start = end;
+        }
+
+        // A run that resolved to nothing at all still has to produce something
+        // the layout engine can consume.
+        if runs.is_empty() {
+            runs.push(run);
+        }
+        Ok(runs)
     }
 
     /// Dispatch to either CLDR-aware layout (`icu` feature) or the built-in
@@ -1206,17 +1305,17 @@ impl Pipeline {
 
         // Custom shaper: simplified LTR-only path (no bidi/ICU, no cache).
         if matches!(self.shaper, ShaperKind::Custom(_)) {
-            let run = self.shape_run_with_notdef_fallback(text, style.font_size, false, 0)?;
-            return self.layout_dispatch(text, &[run], &constraints, style.alignment);
+            let runs = self.shape_run_with_notdef_fallback(text, style.font_size, false, 0)?;
+            return self.layout_dispatch(text, &runs, &constraints, style.alignment);
         }
 
         // Vertical text path: shape as LTR (no bidi), lay out top-to-bottom.
         // ICU line-break is not applicable here; use the dedicated vertical engine.
         if style.flow_direction == FlowDirection::Vertical {
-            let run = self.shape_run_with_notdef_fallback(text, style.font_size, false, 0)?;
+            let runs = self.shape_run_with_notdef_fallback(text, style.font_size, false, 0)?;
             return self.engine.layout_vertical(
                 text,
-                &[run],
+                &runs,
                 style.max_width, // repurposed as max column height (0 = unbounded)
                 style.font_size,
                 self.vmetrics.as_ref(),
@@ -1280,8 +1379,7 @@ impl Pipeline {
                 }
             }
             // Single-script LTR (or non-icu build): one shape call with fallback.
-            let run = self.shape_run_with_notdef_fallback(text, style.font_size, false, 0)?;
-            let runs = vec![run];
+            let runs = self.shape_run_with_notdef_fallback(text, style.font_size, false, 0)?;
             self.shape_cache_text = text.to_owned();
             self.shape_cache_style_hash = style_hash;
             self.shape_cache_runs = runs.clone();
@@ -1301,9 +1399,12 @@ impl Pipeline {
                 continue;
             }
             let rtl = br.level % 2 == 1;
-            let run =
-                self.shape_run_with_notdef_fallback(slice, style.font_size, rtl, br.start as u32)?;
-            runs.push(run);
+            runs.extend(self.shape_run_with_notdef_fallback(
+                slice,
+                style.font_size,
+                rtl,
+                br.start as u32,
+            )?);
         }
 
         // Cache the bidi-shaped runs.
