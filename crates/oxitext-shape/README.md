@@ -138,6 +138,16 @@ The primary shaper. Methods that take `Arc<[u8]>` cooperate with the optional `S
 | `requires_indic_shaping(text)` | `true` if the text contains Indic-script characters needing reordering |
 | `requires_mark_positioning(text)` | `true` if the text contains combining marks needing GPOS positioning |
 
+### OpenType script tags
+
+| Item | Description |
+|------|-------------|
+| `Script` | Unicode/OpenType script enum (re-exported from `swash`); `Script::from_opentype(tag)` / `to_opentype()` convert to and from a 4-byte OpenType script tag |
+| `Tag` | Type alias for a 4-byte OpenType tag (`u32`) |
+| `tag_from_bytes(bytes)` | Builds a `Tag` from a `&[u8; 4]` |
+
+Lets a caller check whether the shaper accepts a given OpenType script tag — round-tripped through `Script::from_opentype`/`Script::to_opentype` — before passing it to `ShapeRequest::script`, without shaping first.
+
 ### Free functions
 
 | Function | Description |

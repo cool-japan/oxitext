@@ -1,7 +1,7 @@
 # oxitext (facade) TODO
 
 ## Status
-Facade crate providing the end-to-end text pipeline (shape → bidi → line-break → layout → rasterize), current as of 0.2.1 (2026-07-30). Re-exports core types and the bidi/linebreak/vertical/tate-chu-yoko layout modules unconditionally; SDF atlas generation behind `sdf`, CLDR/ICU behind `icu`, PDF font subsetting behind `font-subset`, CBDT/sbix bitmap-strike decoding behind `color-bitmap-fonts`. The `Pipeline` struct (behind the default-on `pure` feature) combines `SwashShaper` + `LayoutEngine`/`SimpleLayouter` + `FontdueRasterizer` into a single `render()` call, with bidi-aware, vertical-writing, font-fallback, and COLRv0/v1 color-glyph rendering (gradients, transforms, composite paints) all wired in. ~1,100 SLOC. Every item below is implemented; 66 tests + 7 doctests pass with `--all-features`.
+Facade crate providing the end-to-end text pipeline (shape → bidi → line-break → layout → rasterize), current as of 0.2.3 (2026-08-12). Re-exports core types and the bidi/linebreak/vertical/tate-chu-yoko layout modules unconditionally; SDF atlas generation behind `sdf`, CLDR/ICU behind `icu`, PDF font subsetting behind `font-subset`, CBDT/sbix bitmap-strike decoding behind `color-bitmap-fonts`. The `Pipeline` struct (behind the default-on `pure` feature) combines `SwashShaper` + `LayoutEngine`/`SimpleLayouter` + `FontdueRasterizer` into a single `render()` call, with bidi-aware, vertical-writing, font-fallback, and COLRv0/v1 color-glyph rendering (gradients, transforms, composite paints) all wired in. ~1,100 SLOC. Every item below is implemented; 74 tests + 7 doctests pass with `--all-features`.
 
 ## Core Implementation
 - [x] Add `Pipeline::render_to_image(text, style, bg, fg) -> ColorBitmap` producing a ready-to-use RGBA pixel buffer (canvas sized from paragraph metrics)
@@ -31,6 +31,11 @@ Facade crate providing the end-to-end text pipeline (shape → bidi → line-bre
   - **Design:** Walk `self.glyphs.iter().enumerate()`; for each glyph check `self.outputs[i]`: `Greyscale` → existing coverage blit; `Color(rgba)` → Porter-Duff source-over the RGBA bitmap at `glyph.pos.round()` onto the canvas; `Sdf`/`Msdf` → skip with doc comment; `Lcd` → greyscale fallback. Use `oxitext_raster::scalar::porter_duff_source_over` or the SIMD variant for the blit.
   - **Files:** `crates/oxitext/src/lib.rs` (`composite_to_rgba`), `crates/oxitext/tests/color_composite.rs` (new)
   - **Tests:** synthetic color glyph composite (4×4 red bitmap, assert non-zero alpha); mixed greyscale+color; system color font smoke test (skip-on-absent)
+- [x] Fix `Pipeline::shape_run_with_notdef_fallback` so a `.notdef` fallback hit no longer mis-attributes every glyph in the run to the fallback font, and no longer drops a mark glyph a fallback attaches to a base glyph (done 2026-08-12)
+  - **Goal:** Every glyph a caller rasterizes via `(font_data, gid)` is paired with the font that actually produced that glyph id; a fallback that shapes a cluster into base + mark keeps both glyphs.
+  - **Design:** Previously, the first `.notdef` fallback hit anywhere in a run shaped the whole text slice into a single `ShapedRun` and overwrote that run's one `font_data` field with the fallback's. Since a `ShapedRun` carries one `font_data` for its entire glyph slice, this silently re-pointed every other glyph too — glyphs the primary font had already resolved kept the primary's glyph ids but were now attributed to the fallback face, so a caller rasterizing per `(font_data, gid)` drew the primary's glyph ids out of the fallback's `glyf`/`CFF ` table (wrong letters, not wrong metrics). This was invisible whenever the two faces number glyphs alike for the affected codepoints (Noto Sans, Meiryo, MS Gothic, MS Mincho, Yu Gothic all do, for basic Latin). A second, related defect fixed at the same time: only the first non-notdef glyph a fallback produced for a cluster was kept, so a fallback that shaped a cluster into a base + mark lost the mark. Fix: `shape_run_with_notdef_fallback` now returns one `ShapedRun` per font actually used, split at font boundaries in logical order; every caller already accepted `&[ShapedRun]` (the bidi path has always produced several), so no caller signature changed.
+  - **Files:** `crates/oxitext/src/lib.rs` (`Pipeline::shape_run_with_notdef_fallback`), `crates/oxitext/tests/fallback_runs.rs` (new)
+  - **Tests:** 6 new regression tests in `tests/fallback_runs.rs`, using only bundled fonts (oxifont-bundled's `NOTO_SANS_REGULAR` as primary, `NOTO_SANS_MONO_REGULAR` as fallback) — no system-font dependency.
 
 ## API Improvements
 - [x] Add a prelude module: `use oxitext::prelude::*` importing Pipeline, TextStyle, RenderResult, Bitmap, alignment/metrics types
@@ -44,6 +49,9 @@ Facade crate providing the end-to-end text pipeline (shape → bidi → line-bre
   - **Files:** `crates/oxitext/src/lib.rs`
   - **Tests:** traits accessible via `oxitext::ShapeBackend` in integration test
 - [x] Add `TextStyle::with_alignment(TextAlignment)` (+ `with_font_size`/`with_max_width`); alignment honoured by the layout engine
+- [x] Re-export `Script`, `Tag`, `tag_from_bytes` from `oxitext_shape` behind `pure` (done 2026-08-12)
+  - **Goal:** Let a caller check whether the shaper accepts a given OpenType script tag — `Script::from_opentype(tag)` round-tripped through `Script::to_opentype()` — before passing it to `ShapeRequest::script`, without shaping first or taking a direct dependency on the shaper crate.
+  - **Files:** `crates/oxitext/src/lib.rs`
 
 ## Testing
 - [x] Integration test: full pipeline render of "Hello" at 16px produces non-empty bitmaps; measure/shape_and_layout/render_to_image/alignment/has_rtl covered in `tests/layout_api.rs`

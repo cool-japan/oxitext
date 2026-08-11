@@ -116,7 +116,7 @@ From [`oxitext-layout`](../oxitext-layout) (always available):
 - Vertical: `VerticalMetrics`, `is_upright_in_vertical` (`vertical` submodule)
 - Tate-chu-yoko: `detect_runs`, `GlyphEntry`, `TateChuYokoRun`
 
-Behind `pure`: `SwashShaper`, `SimpleLayouter`, `FontdueRasterizer`, and the backend traits `ShapeBackend`, `RasterBackend`, `ShapeDirection`, `ShapeFeature`, `ShapeRequest`.
+Behind `pure`: `SwashShaper`, `SimpleLayouter`, `FontdueRasterizer`, and the backend traits `ShapeBackend`, `RasterBackend`, `ShapeDirection`, `ShapeFeature`, `ShapeRequest` — plus `Script`, `Tag`, `tag_from_bytes` for checking whether the shaper accepts a given OpenType script tag (`Script::from_opentype`/`to_opentype`) before passing it to `ShapeRequest::script`.
 
 Behind `sdf`: the `oxitext::sdf` module (full re-export of [`oxitext-sdf`](../oxitext-sdf)).
 
