@@ -7,7 +7,7 @@
 Pure-Rust crates. OxiText complements **OxiFont** (font parsing + discovery)
 and is consumed by every Oxi*** subsystem that draws or measures text.
 
-## Status: 0.2.3 released (2026-08-12)
+## Status: 0.2.4 (2026-08-12)
 
 All milestones M0–M7 are complete. See `CHANGELOG.md`'s `[0.2.3]` section for
 what landed since the 0.2.2 release. **851 tests passing**
@@ -55,7 +55,7 @@ oxitext-bench     — criterion benchmarks (publish = false)
 
 ```toml
 [dependencies]
-oxitext = "0.2.3"  # latest stable
+oxitext = "0.2.4"  # latest stable
 ```
 
 ```rust
@@ -151,7 +151,7 @@ OxiUI/wgpu consuming the `oxitext-sdf` atlas output.
 
 ## Workspace
 
-- Version: **0.2.3** (2026-08-12)
+- Version: **0.2.4** (2026-08-12)
 - Edition: **2021**
 - MSRV: **1.89**
 - License: **Apache-2.0**

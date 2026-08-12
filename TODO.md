@@ -1,6 +1,6 @@
 # OxiText Project TODO
 
-## Status — v0.2.3 released (2026-08-12)
+## Status — v0.2.4 (2026-08-12)
 
 All milestones M0–M7 complete. **851 tests passing** (`cargo nextest run --workspace --exclude oxitext-bench --all-features`; 16 further tests are `#[ignore]`/env-var-gated fixture sweeps not counted here; 749 pass with default features) — 845 before 0.2.3's fallback-run fix below, plus its 6 new tests — with 80 doctests, zero warnings, pure Rust default features, MSRV 1.89 (verified on a real 1.89 toolchain). See `CHANGELOG.md`'s `[0.2.3]` section for what has landed since the 0.2.2 release.
 

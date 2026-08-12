@@ -1,6 +1,6 @@
 # oxitext-shape TODO
 
-## Status (0.2.3, 2026-08-12)
+## Status (0.2.4, 2026-08-12)
 Swash-based text shaper with a swappable `ShapeBackend` trait (default `SwashShaperBackend` wrapping `SwashShaper`; optional `RustybuzzShaper` behind the `rustybuzz-backend` feature). Covers OpenType feature control, a `ShapeRequest` builder with script/language tags, Arabic/Indic/Thai-Khmer-Myanmar script detection, vertical (`vert`/`vrt2`) shaping, font-fallback chains, an LRU shape cache, AAT table detection, kashida and emoji-ZWJ helpers, and batch shaping — plus, behind feature flags, ICU4X script itemisation (`icu`), system-font discovery (`system-fonts`), and native OS font fallback (`native-fallback`). ~1290 SLOC in `lib.rs`, ~280 in `backend.rs`, plus dedicated `batch`/`cache`/`script_detect`/`system_fonts`/`variational` modules (80 tests passing with default features, 92 with `--all-features`; 4 ignored benchmark tests). All checklist items below are implemented; a few Testing entries are annotated where the existing test is a non-panic smoke check rather than a full glyph-level correctness assertion.
 
 ## Core Implementation

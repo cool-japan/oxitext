@@ -11,14 +11,14 @@ The crate is **100% Pure Rust** — no C/C++ dependencies. It implements the Fel
 
 ```toml
 [dependencies]
-oxitext-sdf = "0.2.3"
+oxitext-sdf = "0.2.4"
 ```
 
 ### Feature flags
 
 ```toml
 # SIMD-accelerated EDT inner loop (pulls in the `wide` crate)
-oxitext-sdf = { version = "0.2.3", features = ["simd"] }
+oxitext-sdf = { version = "0.2.4", features = ["simd"] }
 ```
 
 | Feature | Default | Effect |

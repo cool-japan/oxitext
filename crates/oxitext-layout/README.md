@@ -11,7 +11,7 @@ This crate is **100% Pure Rust** and `#![forbid(unsafe_code)]`. It builds on the
 
 ```toml
 [dependencies]
-oxitext-layout = "0.2.3"
+oxitext-layout = "0.2.4"
 ```
 
 With optional capabilities:
@@ -19,7 +19,7 @@ With optional capabilities:
 ```toml
 [dependencies]
 # Automatic (dictionary) hyphenation and ICU4X/CLDR line breaking
-oxitext-layout = { version = "0.2.3", features = ["hyphenation", "icu"] }
+oxitext-layout = { version = "0.2.4", features = ["hyphenation", "icu"] }
 ```
 
 ## Quick Start
