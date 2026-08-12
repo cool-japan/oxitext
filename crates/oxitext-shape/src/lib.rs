@@ -89,6 +89,18 @@ use smallvec::SmallVec;
 use std::sync::Arc;
 use swash::shape::{Direction, ShapeContext};
 use swash::FontRef;
+/// The shaper's own view of an OpenType script tag.
+///
+/// Re-exported so callers can ask whether a tag the shaper would ACCEPT
+/// round-trips to the same tag — `Script::from_opentype(tag)` followed by
+/// [`Script::to_opentype`] — before handing it to
+/// [`ShapeRequest::script`]. Without this, a caller wanting to know
+/// "does this shaper understand `dev2`?" has to shape and inspect the result,
+/// which is not an option on targets where a panic aborts the process.
+///
+/// [`tag_from_bytes`] builds the [`Tag`] the two functions speak in, so a
+/// caller never has to hand-assemble the big-endian `u32`.
+pub use swash::{tag_from_bytes, text::Script, Tag};
 // ──────────────────────────────────────────────────────────────────────────────
 // ShapeFeature
 // ──────────────────────────────────────────────────────────────────────────────

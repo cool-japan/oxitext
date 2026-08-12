@@ -7,13 +7,13 @@
 Pure-Rust crates. OxiText complements **OxiFont** (font parsing + discovery)
 and is consumed by every Oxi*** subsystem that draws or measures text.
 
-## Status: 0.2.2 released (2026-08-06)
+## Status: 0.2.3 released (2026-08-12)
 
-All milestones M0–M7 are complete. See `CHANGELOG.md`'s `[0.2.2]` section for
-what landed since the 0.2.1 release. **845 tests passing**
+All milestones M0–M7 are complete. See `CHANGELOG.md`'s `[0.2.3]` section for
+what landed since the 0.2.2 release. **851 tests passing**
 (`cargo nextest run --workspace --exclude oxitext-bench --all-features`; 16
 further tests are `#[ignore]`/env-var-gated fixture sweeps not counted here;
-743 pass with default features), plus 80 doctests.
+749 pass with default features), plus 80 doctests.
 Zero warnings, pure Rust default features, MSRV 1.89.
 
 ### What is implemented
@@ -41,6 +41,7 @@ Zero warnings, pure Rust default features, MSRV 1.89.
 
 ```
 oxitext-core      — shared value types (ShapedGlyph, PositionedGlyph, Bitmap, TextStyle …)
+oxitext-swash     — vendored fork of `swash` (see "Third-party code" below); shaper backend
 oxitext-shape     — text shaping (swash + rustybuzz backends, script detection, fallback)
 oxitext-layout    — bidi reorder, line-break, vertical text, tate-chu-yoko, hyphenation
 oxitext-raster    — glyph rasterization (fontdue, ab_glyph, swash, COLRv0/v1, SVG)
@@ -54,7 +55,7 @@ oxitext-bench     — criterion benchmarks (publish = false)
 
 ```toml
 [dependencies]
-oxitext = "0.2.2"  # latest stable
+oxitext = "0.2.3"  # latest stable
 ```
 
 ```rust
@@ -150,7 +151,7 @@ OxiUI/wgpu consuming the `oxitext-sdf` atlas output.
 
 ## Workspace
 
-- Version: **0.2.2** (2026-07-30)
+- Version: **0.2.3** (2026-08-12)
 - Edition: **2021**
 - MSRV: **1.89**
 - License: **Apache-2.0**

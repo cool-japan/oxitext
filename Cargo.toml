@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 rust-version = "1.89"
 authors = ["COOLJAPAN OU (Team Kitasan)"]
@@ -23,12 +23,12 @@ description = "OxiText is the COOLJAPAN Pure-Rust text pipeline: shape → bidi 
 
 [workspace.dependencies]
 # workspace internal
-oxitext-core   = { path = "crates/oxitext-core",   version = "0.2.2" }
-oxitext-shape  = { path = "crates/oxitext-shape",  version = "0.2.2" }
-oxitext-layout = { path = "crates/oxitext-layout", version = "0.2.2" }
-oxitext-raster = { path = "crates/oxitext-raster", version = "0.2.2" }
-oxitext-sdf    = { path = "crates/oxitext-sdf",    version = "0.2.2" }
-oxitext-icu    = { path = "crates/oxitext-icu",    version = "0.2.2" }
+oxitext-core   = { path = "crates/oxitext-core",   version = "0.2.3" }
+oxitext-shape  = { path = "crates/oxitext-shape",  version = "0.2.3" }
+oxitext-layout = { path = "crates/oxitext-layout", version = "0.2.3" }
+oxitext-raster = { path = "crates/oxitext-raster", version = "0.2.3" }
+oxitext-sdf    = { path = "crates/oxitext-sdf",    version = "0.2.3" }
+oxitext-icu    = { path = "crates/oxitext-icu",    version = "0.2.3" }
 # `swash` is OxiText's own vendored fork, `oxitext-swash` (see
 # `crates/oxitext-swash/PROVENANCE.md`). The `package = "oxitext-swash"` alias
 # means every consumer keeps writing `use swash::...` unchanged, so the fork is
@@ -44,7 +44,7 @@ oxitext-icu    = { path = "crates/oxitext-icu",    version = "0.2.2" }
 # `swash::zeno::*` must add `features = ["scale", "render"]` to its OWN
 # dependency line -- as `oxitext-raster` does -- or it gets a confusing
 # "could not find `scale` in `swash`" error.
-swash                = { package = "oxitext-swash", path = "crates/oxitext-swash", version = "0.2.2", default-features = false, features = ["std"] }
+swash                = { package = "oxitext-swash", path = "crates/oxitext-swash", version = "0.2.3", default-features = false, features = ["std"] }
 # Dependencies of the vendored `oxitext-swash`, centralized here per
 # CONTRIBUTING.md's workspace-inheritance rule. `skrifa` is pinned at 0.44 --
 # the top of upstream swash's `>= 0.31.1, <= 0.44` range and what OxiText
@@ -109,4 +109,4 @@ oxifont-bundled        = { version = "0.2.2", features = ["bundled-noto"] }
 oxifont-subset         = { version = "0.2.2" }
 oxifont-adapter-native = { version = "0.2.2" }
 # facade crate (used in workspace-level deps so bench can reference it)
-oxitext = { path = "crates/oxitext", version = "0.2.2" }
+oxitext = { path = "crates/oxitext", version = "0.2.3" }

@@ -1,8 +1,10 @@
 # OxiText Project TODO
 
-## Status — v0.2.2 released (2026-08-06)
+## Status — v0.2.3 released (2026-08-12)
 
-All milestones M0–M7 complete. **845 tests passing** (`cargo nextest run --workspace --exclude oxitext-bench --all-features`; 16 further tests are `#[ignore]`/env-var-gated fixture sweeps not counted here; 743 pass with default features) — 827 before the swash absorption below, plus its 14 new tests, plus further work since — with 80 doctests, zero warnings, pure Rust default features, MSRV 1.89 (verified on a real 1.89 toolchain). See `CHANGELOG.md`'s `[0.2.2]` section for what has landed since the 0.2.1 release.
+All milestones M0–M7 complete. **851 tests passing** (`cargo nextest run --workspace --exclude oxitext-bench --all-features`; 16 further tests are `#[ignore]`/env-var-gated fixture sweeps not counted here; 749 pass with default features) — 845 before 0.2.3's fallback-run fix below, plus its 6 new tests — with 80 doctests, zero warnings, pure Rust default features, MSRV 1.89 (verified on a real 1.89 toolchain). See `CHANGELOG.md`'s `[0.2.3]` section for what has landed since the 0.2.2 release.
+
+**0.2.3**: `Pipeline::shape_run_with_notdef_fallback` (the private fn behind `shape_and_layout`) now returns one `ShapedRun` per font actually used instead of one run whose `font_data` got overwritten wholesale on the first `.notdef` fallback hit — that overwrite had silently re-pointed every glyph the PRIMARY font had already resolved to the fallback face too (wrong letters, not wrong metrics, invisible whenever the two faces share glyph-id numbering for the affected codepoints). Regression suite: `crates/oxitext/tests/fallback_runs.rs` (6 tests, bundled fonts only). Also: `oxitext_shape::{Script, Tag, tag_from_bytes}` re-exported (and re-exported again from the `oxitext` facade under `pure`), so a caller can check whether the shaper accepts a script tag before passing it to `ShapeRequest::script`.
 
 **8 crates in the workspace since 0.2.2**: `crates/oxitext-swash` is a vendored fork of `swash` 0.2.10 by Chad Brokaw carrying OxiText's fix for two Indic reordering defects (one of them upstream `dfrg/swash#93`). It is the only vendored crate and the only one without `#![forbid(unsafe_code)]`, but since the 2026-08-05 user election it otherwise obeys COOLJAPAN house style in full — the 2000-line limit (upstream's 5 491-line `text/unicode_data.rs` is a seven-submodule directory now), one crate-level clippy allow, no `.unwrap()`, and the `oxiarc-*` stack in place of upstream's `yazi`. `crates/oxitext-swash/PROVENANCE.md` is its audit trail and `CONTRIBUTING.md` carries the vendored-code rules. It roughly doubles the workspace's Rust code (22 970 SLoC over 68 files), which is a recurring tax on every future `clippy`/`fmt`/`nextest`/toolchain bump — budget it.
 
@@ -389,7 +391,7 @@ the §4(b) headers and `PROVENANCE.md`'s divergence table are.
   any oxitext-owned crate changed except the one recorded in the S6 deviation.
 - **Nothing was committed, staged, pushed or published; no version was bumped.**
 
-**0.2.3 backlog created by the absorption** (none blocks 0.2.2):
+**Future backlog created by the absorption** (none blocked 0.2.2; none landed in 0.2.3 either — that release's scope was the notdef-fallback fix above instead):
 
 - [x] `yazi` → `oxiarc-deflate` in `oxitext-swash`'s `scale/bitmap/png.rs` — **done in S9b**
       (user election 2026-08-05). `yazi` is gone from every manifest and every feature

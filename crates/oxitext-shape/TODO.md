@@ -1,7 +1,7 @@
 # oxitext-shape TODO
 
-## Status (0.2.1, 2026-07-30)
-Swash-based text shaper with a swappable `ShapeBackend` trait (default `SwashShaperBackend` wrapping `SwashShaper`; optional `RustybuzzShaper` behind the `rustybuzz-backend` feature). Covers OpenType feature control, a `ShapeRequest` builder with script/language tags, Arabic/Indic/Thai-Khmer-Myanmar script detection, vertical (`vert`/`vrt2`) shaping, font-fallback chains, an LRU shape cache, AAT table detection, kashida and emoji-ZWJ helpers, and batch shaping — plus, behind feature flags, ICU4X script itemisation (`icu`), system-font discovery (`system-fonts`), and native OS font fallback (`native-fallback`). ~1290 SLOC in `lib.rs`, ~280 in `backend.rs`, plus dedicated `batch`/`cache`/`script_detect`/`system_fonts`/`variational` modules (84 tests passing, 4 ignored benchmark tests). All checklist items below are implemented; a few Testing entries are annotated where the existing test is a non-panic smoke check rather than a full glyph-level correctness assertion.
+## Status (0.2.3, 2026-08-12)
+Swash-based text shaper with a swappable `ShapeBackend` trait (default `SwashShaperBackend` wrapping `SwashShaper`; optional `RustybuzzShaper` behind the `rustybuzz-backend` feature). Covers OpenType feature control, a `ShapeRequest` builder with script/language tags, Arabic/Indic/Thai-Khmer-Myanmar script detection, vertical (`vert`/`vrt2`) shaping, font-fallback chains, an LRU shape cache, AAT table detection, kashida and emoji-ZWJ helpers, and batch shaping — plus, behind feature flags, ICU4X script itemisation (`icu`), system-font discovery (`system-fonts`), and native OS font fallback (`native-fallback`). ~1290 SLOC in `lib.rs`, ~280 in `backend.rs`, plus dedicated `batch`/`cache`/`script_detect`/`system_fonts`/`variational` modules (80 tests passing with default features, 92 with `--all-features`; 4 ignored benchmark tests). All checklist items below are implemented; a few Testing entries are annotated where the existing test is a non-panic smoke check rather than a full glyph-level correctness assertion.
 
 ## Core Implementation
 - [x] Add script-aware itemization: split input text into runs by Unicode script (Latin, Arabic, Devanagari, Han, etc.) before shaping each run separately (~80 SLOC)
@@ -52,6 +52,8 @@ Swash-based text shaper with a swappable `ShapeBackend` trait (default `SwashSha
   - **Implemented:** Default trait method in `backend.rs`; delegates to `shape_with_direction` or `shape_with_features` based on the feature list.
 - [x] Make `SwashShaper` accept `&[u8]` in addition to `Arc<Vec<u8>>` to avoid unnecessary allocation
   - **Implemented:** `SwashShaper::shape_slice(&[u8], text, px_size)` and `shape_slice_rtl` convenience methods added.
+- [x] Re-export `Script`, `Tag`, `tag_from_bytes` from `swash` at the crate root (done 2026-08-12)
+  - **Implemented:** `pub use swash::{tag_from_bytes, text::Script, Tag}` in `src/lib.rs`, unconditionally available (no feature gate) — lets a caller check whether the shaper accepts a given OpenType script tag, round-tripped through `Script::from_opentype`/`Script::to_opentype`, before passing it to `ShapeRequest::script`. Re-export only; no new tests in this crate's own suite.
 
 ## Testing
 - [x] Test Arabic text shaping (RTL) does not panic and returns logically-ordered clusters

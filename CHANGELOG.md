@@ -5,6 +5,16 @@ All notable changes to OxiText are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-08-12
+
+### Added
+
+- `oxitext_shape::{Script, Tag, tag_from_bytes}` re-exported from `oxitext-shape`, and re-exported again from the `oxitext` facade crate under the `pure` feature, so a caller can check whether the shaper accepts a given OpenType script tag — `Script::from_opentype(tag)` round-tripped through `Script::to_opentype()` — before passing it to `ShapeRequest::script`, without shaping first or taking a direct dependency on the shaper crate.
+
+### Fixed
+
+- **A `.notdef` fallback hit could misattribute primary-font glyphs to the fallback font, drawing wrong letters** — `shape_run_with_notdef_fallback` shaped every glyph into a single `ShapedRun`, and since `ShapedRun` carries one `font_data` for its whole glyph slice, the first fallback hit overwrote that run-level `font_data` with the fallback's — re-pointing every OTHER glyph in the run too. Those glyphs kept the primary's glyph ids but were now attributed to the fallback face, so a caller rasterising per `(font_data, gid)` drew the primary's ids out of the fallback's `glyf`/`CFF ` table. The defect was invisible whenever the two faces happened to number their glyphs alike, as Noto Sans, Meiryo, MS Gothic, MS Mincho and Yu Gothic all do for basic Latin. A second, related defect is fixed with it: only the first non-notdef glyph a fallback produced for a cluster was kept, so a fallback that shaped the cluster into a base plus a mark lost the mark. `shape_run_with_notdef_fallback` now returns one `ShapedRun` per font actually used, split at font boundaries in logical order; every caller already accepted `&[ShapedRun]` because the bidi path has always produced several. Regression tests: `crates/oxitext/tests/fallback_runs.rs` (6 tests, bundled fonts only — no system-font dependency).
+
 ## [0.2.2] - 2026-08-06
 
 ### Fixed
@@ -238,6 +248,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FFI audit Dockerfile for CI-level purity verification
 - End-to-end conformance tests in `tests/`
 
+[0.2.3]: https://github.com/cool-japan/oxitext/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/cool-japan/oxitext/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/cool-japan/oxitext/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/cool-japan/oxitext/compare/v0.1.4...v0.2.0

@@ -12,16 +12,16 @@ The crate is a thin orchestration layer: nearly everything it exposes is **re-ex
 ```toml
 [dependencies]
 # Default: full Pure-Rust pipeline
-oxitext = "0.2.2"
+oxitext = "0.2.3"
 
 # Explicit minimal pipeline
-oxitext = { version = "0.2.2", features = ["pure"] }
+oxitext = { version = "0.2.3", features = ["pure"] }
 
 # Pipeline + SDF atlas generation for GPU rendering
-oxitext = { version = "0.2.2", features = ["pure", "sdf"] }
+oxitext = { version = "0.2.3", features = ["pure", "sdf"] }
 
 # Everything: pipeline + ICU + SDF + PNG output
-oxitext = { version = "0.2.2", features = ["pure", "sdf", "icu", "png-output"] }
+oxitext = { version = "0.2.3", features = ["pure", "sdf", "icu", "png-output"] }
 ```
 
 ## Quick Start
@@ -116,7 +116,7 @@ From [`oxitext-layout`](../oxitext-layout) (always available):
 - Vertical: `VerticalMetrics`, `is_upright_in_vertical` (`vertical` submodule)
 - Tate-chu-yoko: `detect_runs`, `GlyphEntry`, `TateChuYokoRun`
 
-Behind `pure`: `SwashShaper`, `SimpleLayouter`, `FontdueRasterizer`, and the backend traits `ShapeBackend`, `RasterBackend`, `ShapeDirection`, `ShapeFeature`, `ShapeRequest`.
+Behind `pure`: `SwashShaper`, `SimpleLayouter`, `FontdueRasterizer`, and the backend traits `ShapeBackend`, `RasterBackend`, `ShapeDirection`, `ShapeFeature`, `ShapeRequest` — plus `Script`, `Tag`, `tag_from_bytes` for checking whether the shaper accepts a given OpenType script tag (`Script::from_opentype`/`to_opentype`) before passing it to `ShapeRequest::script`.
 
 Behind `sdf`: the `oxitext::sdf` module (full re-export of [`oxitext-sdf`](../oxitext-sdf)).
 

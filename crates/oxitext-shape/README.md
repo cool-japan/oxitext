@@ -11,7 +11,7 @@ This crate is **100% Pure Rust** and `#![forbid(unsafe_code)]`. The default shap
 
 ```toml
 [dependencies]
-oxitext-shape = "0.2.2"
+oxitext-shape = "0.2.3"
 ```
 
 With optional capabilities:
@@ -19,7 +19,7 @@ With optional capabilities:
 ```toml
 [dependencies]
 # rustybuzz alternative backend, ICU4X script itemisation, and system-font lookup
-oxitext-shape = { version = "0.2.2", features = ["rustybuzz-backend", "icu", "system-fonts"] }
+oxitext-shape = { version = "0.2.3", features = ["rustybuzz-backend", "icu", "system-fonts"] }
 ```
 
 ## Quick Start
@@ -137,6 +137,16 @@ The primary shaper. Methods that take `Arc<[u8]>` cooperate with the optional `S
 | `requires_arabic_shaping(text)` | `true` if the text contains Arabic-script characters needing joining/form selection |
 | `requires_indic_shaping(text)` | `true` if the text contains Indic-script characters needing reordering |
 | `requires_mark_positioning(text)` | `true` if the text contains combining marks needing GPOS positioning |
+
+### OpenType script tags
+
+| Item | Description |
+|------|-------------|
+| `Script` | Unicode/OpenType script enum (re-exported from `swash`); `Script::from_opentype(tag)` / `to_opentype()` convert to and from a 4-byte OpenType script tag |
+| `Tag` | Type alias for a 4-byte OpenType tag (`u32`) |
+| `tag_from_bytes(bytes)` | Builds a `Tag` from a `&[u8; 4]` |
+
+Lets a caller check whether the shaper accepts a given OpenType script tag — round-tripped through `Script::from_opentype`/`Script::to_opentype` — before passing it to `ShapeRequest::script`, without shaping first.
 
 ### Free functions
 
